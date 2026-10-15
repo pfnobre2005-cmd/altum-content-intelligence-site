@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>ALTUM Content Intelligence</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: cabeçalho de marca + abas; cada aba é um painel operacional; resumo antes do detalhe. */
+:root{
+  --bg:#F2F4F1; --surface:#FFFFFF; --surface-2:#F7F9F6; --ink:#15201B; --muted:#5A6A62; --line:#D9E1DB;
+  --accent:#C4462B; --accent-ink:#FFFFFF; --accent-soft:#F6E1D9;
+  --sage:#3B6A55; --sage-soft:#DFEBE3;
+  --good:#2C7A4D; --good-bg:#DDF0E3; --warn:#9A6210; --warn-bg:#F7EBD3; --bad:#AE3434; --bad-bg:#F6DEDC;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1512; --surface:#17201B; --surface-2:#1C2621; --ink:#E6EDE9; --muted:#97A99F; --line:#2A3631;
+  --accent:#EC7A5C; --accent-ink:#1A0D09; --accent-soft:#3A231C; --sage:#8DC0A5; --sage-soft:#1E2E26;
+  --good:#6DC891; --good-bg:#183324; --warn:#E3AB4E; --warn-bg:#352812; --bad:#F08A85; --bad-bg:#3A1C1B; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1512; --surface:#17201B; --surface-2:#1C2621; --ink:#E6EDE9; --muted:#97A99F; --line:#2A3631;
+  --accent:#EC7A5C; --accent-ink:#1A0D09; --accent-soft:#3A231C; --sage:#8DC0A5; --sage-soft:#1E2E26;
+  --good:#6DC891; --good-bg:#183324; --warn:#E3AB4E; --warn-bg:#352812; --bad:#F08A85; --bad-bg:#3A1C1B; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;padding-bottom:14px;border-bottom:2px solid var(--ink)}
+.brand{font-family:var(--f-display);font-weight:800;font-stretch:78%;font-size:30px;letter-spacing:.01em;line-height:1;text-transform:uppercase}
+.brand span{color:var(--accent)}
+.brand small{display:block;font-family:var(--f-body);font-stretch:100%;font-weight:500;font-size:12px;letter-spacing:.08em;color:var(--muted);margin-top:6px;text-transform:uppercase}
+.mode{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.on{background:var(--good)} .dot.demo{background:var(--warn)}
+nav.tabs{display:flex;gap:2px;overflow-x:auto;margin:14px 0 22px;border-bottom:1px solid var(--line);scrollbar-width:thin}
+nav.tabs button{flex:none;background:none;border:0;border-bottom:3px solid transparent;padding:10px 12px;font:600 13px var(--f-body);color:var(--muted);cursor:pointer}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs button:hover{color:var(--ink)}
+h2{font-family:var(--f-display);font-weight:700;font-stretch:85%;font-size:24px;margin:0;text-wrap:balance}
+h3{font-family:var(--f-display);font-weight:700;font-stretch:90%;font-size:16px;margin:0 0 10px;text-wrap:balance}
+.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)} .small{font-size:12px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.sec{display:grid;gap:18px}
+.sechead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr))}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));border:1px solid var(--line);border-radius:6px;background:var(--surface);overflow:hidden}
+.kpi{padding:12px 14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-width:0}
+.kpi b{display:block;font-family:var(--f-mono);font-weight:500;font-size:20px;font-variant-numeric:tabular-nums;margin-top:2px}
+.kpi.hl b{color:var(--accent)}
+.best{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:14px}
+.best .panel b{display:block;font-family:var(--f-display);font-size:20px;font-weight:700;font-stretch:85%;margin:4px 0}
+label{display:grid;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+input,select,textarea{font:14px var(--f-body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:8px 10px;min-width:0;width:100%}
+textarea{min-height:70px;resize:vertical}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn{font:600 13px var(--f-body);border-radius:4px;padding:8px 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--ink)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.pri:hover{filter:brightness(1.05)}
+.btn.danger{color:var(--bad)} .btn.sm{padding:4px 9px;font-size:12px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;background:var(--surface-2);white-space:nowrap}
+td.n,th.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap;letter-spacing:.02em}
+.p-top10{background:var(--good);color:var(--surface)} .p-top25{background:var(--good-bg);color:var(--good)}
+.p-acima{background:var(--sage-soft);color:var(--sage)} .p-abaixo{background:var(--bad-bg);color:var(--bad)} .p-na{background:var(--surface-2);color:var(--muted)}
+.p-rec{background:var(--good-bg);color:var(--good)} .p-aval{background:var(--warn-bg);color:var(--warn)} .p-nao{background:var(--bad-bg);color:var(--bad)}
+.p-fmt{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
+.p-ex{background:var(--warn-bg);color:var(--warn)}
+.bar{height:8px;background:var(--surface-2);border-radius:2px;overflow:hidden;min-width:60px}
+.bar i{display:block;height:100%;background:var(--sage)}
+.bar.acc i{background:var(--accent)}
+.blist{display:grid;gap:8px}
+.bitem{display:grid;grid-template-columns:minmax(0,1fr) 110px 52px;gap:10px;align-items:center;font-size:13px}
+.bitem .lab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bitem .v{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;font-size:12px}
+.ins{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px}
+.ins .panel{border-top:4px solid var(--line)}
+.ins .ok{border-top-color:var(--good)} .ins .ko{border-top-color:var(--bad)} .ins .why{border-top-color:var(--warn)}
+.ins .keep{border-top-color:var(--sage)} .ins .stop{border-top-color:var(--bad)} .ins .test{border-top-color:var(--accent)}
+.ins ul,.plain ul{margin:0;padding-left:18px;display:grid;gap:6px}
+.note{font-size:12px;color:var(--muted);border-left:3px solid var(--warn);padding:6px 10px;background:var(--surface)}
+.banner{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--warn);background:var(--warn-bg);color:var(--ink);border-radius:6px;font-size:13px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:7px 12px;font:600 12px var(--f-body);color:var(--muted);cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.reco{display:grid;gap:14px}
+.reco .step{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.reco .step:last-child{border-bottom:0}
+.reco .step .eyebrow{padding-top:2px}
+.icard{display:grid;gap:10px}
+.icard .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.icard .hd b{font-family:var(--f-display);font-size:17px;font-stretch:88%}
+.scorebox{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.scorebox div{background:var(--surface-2);border-radius:4px;padding:8px 10px}
+.scorebox b{font-family:var(--f-mono);font-size:20px;font-weight:500;display:block}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px 12px;font-size:12px}
+.facts span{display:block;color:var(--muted);font-size:11px}
+.facts strong{font-family:var(--f-mono);font-weight:500}
+#modal{position:fixed;inset:0;background:rgba(10,16,13,.55);display:flex;justify-content:center;align-items:flex-start;overflow-y:auto;z-index:20;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.dlg{background:var(--bg);border:1px solid var(--line);border-radius:8px;width:min(860px,100%);padding:20px;display:grid;gap:16px;margin-block:20px}
+.fgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr))}
+.fgrid .full{grid-column:1/-1}
+fieldset{border:1px solid var(--line);border-radius:6px;padding:12px 14px;margin:0;display:grid;gap:12px;min-width:0}
+legend{font-family:var(--f-display);font-weight:700;font-stretch:90%;padding:0 6px;font-size:15px}
+.err{color:var(--bad);font-size:13px;font-weight:600}
+.crit{display:grid;gap:8px}
+.crit .it{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:4px}
+code,pre{font-family:var(--f-mono);font-size:12px}
+pre{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px;overflow:auto;max-height:420px;margin:0}
+.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:6px;background:var(--surface)}
+@media (max-width:560px){.reco .step{grid-template-columns:1fr;gap:4px}.bitem{grid-template-columns:minmax(0,1fr) 70px 46px}.brand{font-size:24px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">ALTUM <span>Content</span> Intelligence<small>Altum Nutrition · análise de conteúdos publicados no Instagram</small></div>
+    <div class="mode" id="mode"><i class="dot"></i><span>Conectando ao banco…</span></div>
+  </header>
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+  <main id="main"><div class="empty">Carregando…</div></main>
+</div>
+<div id="modal" hidden></div>
+
+<script>
+function genDemo(){
+  var s=20261015;
+  function r(){s|=0;s=s+0x6D2B79F5|0;var t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}
+  function pick(a){return a[Math.floor(r()*a.length)];}
+  function nz(){return 0.75+r()*0.5;}
+  function fx(o,k){return (o&&o[k])||1;}
+  var produtos=['5 MAG + L-Treonina','Cabelo, Pele e Unha','Colágeno Tipo II','Magnésio Inositol','NAC 600','Vit B12 + B9 + Ferro','Vitamina D3 + K2 MK-7','Juice Protein'];
+  var prodFx={'Juice Protein':{rc:1.35,sv:1.1},'NAC 600':{rc:0.9},'Colágeno Tipo II':{rc:1.05,lk:1.1},'5 MAG + L-Treonina':{rc:0.95},'Vitamina D3 + K2 MK-7':{rc:0.85},'Vit B12 + B9 + Ferro':{rc:0.8},'Cabelo, Pele e Unha':{rc:1.1,lk:1.15},'Magnésio Inositol':{rc:0.9,sv:1.1}};
+  var temas=['Como preparar','Mitos e verdades','Ingredientes e rótulo','Rotina e bem-estar','Bastidores','Lançamento e oferta'];
+  var temaFx={'Como preparar':{sv:2.0,sh:1.1,rc:1.1},'Mitos e verdades':{sv:1.4,sh:1.8,cm:1.6,rc:1.2},'Ingredientes e rótulo':{sv:1.6,sh:0.9,cm:1.2,rc:0.9},'Rotina e bem-estar':{sh:1.2,rc:1.1,lk:1.15},'Bastidores':{sv:0.6,sh:0.8,cm:1.1,rc:0.8},'Lançamento e oferta':{sv:0.5,sh:0.5,cm:0.8,rc:0.9,vis:1.4,seg:1.2}};
+  var hookTipos=['Pergunta','Número ou dado','Demonstração','Problema do dia a dia','Bastidores'];
+  var hookFx={'Pergunta':{cm:1.8},'Número ou dado':{rc:1.15,sv:1.25},'Demonstração':{rc:1.3,sh:1.2},'Problema do dia a dia':{rc:1.1,sh:1.3},'Bastidores':{rc:0.8}};
+  var hookTxt={'Pergunta':['Você lê o rótulo antes de comprar suplemento?','Qual é a sua dúvida sobre {p}?'],'Número ou dado':['{p}: o que tem em cada porção, direto do rótulo','3 coisas para conferir no rótulo de um suplemento'],'Demonstração':['Preparando {p} em 20 segundos','Do pote ao copo: {p}'],'Problema do dia a dia':['Esquece de tomar o suplemento todo dia?','Cansou de shake pesado e cremoso?'],'Bastidores':['Bastidores da sessão de fotos da Altum','Como escolhemos a embalagem do {p}']};
+  var ctas=['Salve para consultar depois','Envie para alguém','Comente sua dúvida','Link na bio','Sem CTA'];
+  var ctaFx={'Salve para consultar depois':{sv:1.4},'Envie para alguém':{sh:1.5},'Comente sua dúvida':{cm:1.7},'Link na bio':{vis:1.5,seg:1.3},'Sem CTA':{lk:0.9,sv:0.9,sh:0.9,cm:0.9}};
+  var estilos=['UGC no celular','Estúdio clean','Texto na tela','Tutorial','Lifestyle'];
+  var estiloFx={'UGC no celular':{rc:1.25,cm:1.1},'Estúdio clean':{rc:0.9,lk:1.1},'Texto na tela':{sv:1.2},'Tutorial':{sv:1.3,sh:1.1},'Lifestyle':{rc:1.05,lk:1.1}};
+  var campanhas=['Lançamento Juice Protein','Rotina Altum','Sempre ativo'];
+  var base={lk:0.035,cm:0.0025,sh:0.004,sv:0.005,vis:0.015,seg:0.0025};
+  var fmtFx={reel:{sh:1.3,lk:0.9},carrossel:{sv:1.6,sh:1.2,lk:1.05},estatico:{lk:1.2,sv:0.7,sh:0.6,cm:0.9,vis:0.8,seg:0.7}};
+  var reachBase={reel:4200,carrossel:1700,estatico:1100};
+  var conteudos=[];
+  var d0=Date.UTC(2026,7,17);
+  for(var i=0;i<30;i++){
+    var x=r(); var formato=x<0.45?'reel':(x<0.8?'carrossel':'estatico');
+    var p=pick(produtos), tema=pick(temas), ht=pick(hookTipos), cta=pick(ctas), est=pick(estilos);
+    if(formato!=='reel'&&(est==='UGC no celular'||est==='Tutorial')&&r()<0.5) est='Texto na tela';
+    var dur=null, durF=1;
+    if(formato==='reel'){dur=pick([12,18,22,28,35,48,75]);durF=dur<=24?1.15:(dur>45?0.8:1);}
+    var mult=function(k){return fx(prodFx[p],k)*fx(temaFx[tema],k)*fx(hookFx[ht],k)*fx(ctaFx[cta],k)*fx(estiloFx[est],k)*fx(fmtFx[formato],k)*nz();};
+    var alcance=Math.round(reachBase[formato]*mult('rc')*durF);
+    var m={alcance:alcance};
+    m.likes=Math.round(alcance*base.lk*mult('lk'));
+    m.comentarios=Math.round(alcance*base.cm*mult('cm'));
+    m.compartilhamentos=Math.round(alcance*base.sh*mult('sh'));
+    m.salvamentos=Math.round(alcance*base.sv*mult('sv'));
+    m.visitas=Math.round(alcance*base.vis*mult('vis'));
+    m.seguidores=Math.round(alcance*base.seg*mult('seg'));
+    if(formato==='reel'){
+      m.views=Math.round(alcance*(1.25+r()*0.25));
+      m.duracao=dur;
+      m.retencao=Math.round(Math.max(18,Math.min(85,78-dur*0.55+(r()-0.5)*12)));
+      m.conclusao=r()<0.8?Math.round(Math.max(8,Math.min(75,62-dur*0.6+(r()-0.5)*14))):null;
+      m.tempoMedio=Math.round(dur*m.retencao/100*10)/10;
+    }
+    var dt=new Date(d0+Math.round(i*1.95*86400000));
+    var hk=pick(hookTxt[ht]).replace('{p}',p);
+    var n=String(i+1).padStart(2,'0');
+    conteudos.push({id:'ex_c'+n,nome:'Exemplo '+n+' · '+p+' · '+tema,data:dt.toISOString().slice(0,10),formato:formato,produto:p,
+      campanha:p==='Juice Protein'?'Lançamento Juice Protein':pick(campanhas.slice(1)),tema:tema,hookTipo:ht,hook:hk,cta:cta,estilo:est,
+      arquivo:'',legenda:'Legenda de exemplo. '+hk+' '+(cta==='Sem CTA'?'':cta+'.'),m:m,exemplo:true});
+  }
+  var infl=[
+    {id:'ex_i1',formatoPrincipal:'reels',arroba:'@exemplo.ana.rotina',nome:'Ana (exemplo)',seguidores:38000,nicho:'Rotina e bem-estar',mediaLikes:1350,mediaComentarios:62,mediaViews:14500,postsSemana:4,pctReels:60,pctCarrossel:30,pctEstatico:10,marcas:'Marca de chá, marca de yoga',observacoes:'Perfil fictício para demonstração.',aval:{estetica:5,wellness:5,qualidade:4,consistencia:4,naturalidade:4,historico:4,risco:1},verificado:{alcanceMedio:11200,views:16800,compartilhamentos:140,salvamentos:210,pctBrasil:92,faixaPrincipal:'25–34',pctFaixaAlvo:48,pctFeminino:78,alcanceStories:3100,extras:''},exemplo:true},
+    {id:'ex_i2',formatoPrincipal:'reels',arroba:'@exemplo.treino.do.leo',nome:'Léo (exemplo)',seguidores:120000,nicho:'Treino e academia',mediaLikes:1900,mediaComentarios:45,mediaViews:22000,postsSemana:6,pctReels:85,pctCarrossel:10,pctEstatico:5,marcas:'Três marcas de suplemento nos últimos 3 meses',observacoes:'Perfil fictício. Divulga muitas marcas concorrentes.',aval:{estetica:2,wellness:3,qualidade:3,consistencia:3,naturalidade:2,historico:2,risco:4},verificado:null,exemplo:true},
+    {id:'ex_i3',formatoPrincipal:'carrossel',arroba:'@exemplo.cozinha.leve',nome:'Bia (exemplo)',seguidores:9500,nicho:'Receitas e lifestyle',mediaLikes:520,mediaComentarios:38,mediaViews:4800,postsSemana:3,pctReels:50,pctCarrossel:40,pctEstatico:10,marcas:'Nenhuma publi recente',observacoes:'Perfil fictício. Estética clara, poucas publis.',aval:{estetica:4,wellness:4,qualidade:4,consistencia:3,naturalidade:5,historico:5,risco:1},verificado:null,exemplo:true},
+    {id:'ex_i4',formatoPrincipal:'estatico',arroba:'@exemplo.lifestyle.max',nome:'Max (exemplo)',seguidores:310000,nicho:'Lifestyle e moda',mediaLikes:2400,mediaComentarios:30,mediaViews:null,postsSemana:1,pctReels:20,pctCarrossel:30,pctEstatico:50,marcas:'Bebida energética, cassino online',observacoes:'Perfil fictício. Engajamento baixo para o tamanho.',aval:{estetica:2,wellness:1,qualidade:4,consistencia:2,naturalidade:2,historico:1,risco:5},verificado:null,exemplo:true},
+    {id:'ex_i5',formatoPrincipal:'reels',arroba:'@exemplo.corrida.clara',nome:'Clara (exemplo)',seguidores:52000,nicho:'Corrida',mediaLikes:1100,mediaComentarios:40,mediaViews:9000,postsSemana:2.5,pctReels:55,pctCarrossel:35,pctEstatico:10,marcas:'Tênis de corrida, relógio esportivo',observacoes:'Perfil fictício.',aval:{estetica:4,wellness:4,qualidade:4,consistencia:3,naturalidade:3,historico:4,risco:2},verificado:null,exemplo:true}
+  ];
+  return {conteudos:conteudos,influenciadores:infl};
+}
+if(typeof module!=='undefined') module.exports=genDemo;
+
+
+/* ===================== Estado ===================== */
+var S={conteudos:[],infl:[],criterios:null,produtos:null,config:{},mode:'loading',db:null,errMsg:''};
+var UI={tab:'dashboard',f:{de:'',ate:'',produto:''},lst:{fmt:'',q:''},confirm:null,pedit:null};
+var TABS=[['dashboard','Dashboard'],['conteudos','Conteúdos'],['influenciadores','Influenciadores'],['criterios','Critérios da ALTUM'],['inteligencia','Inteligência']];
+var FMT={reel:'Reel',carrossel:'Carrossel',estatico:'Post Estático'};
+var FMTS=['reel','carrossel','estatico'];
+var FMT_INFL={reels:'Reels',carrossel:'Carrossel',estatico:'Post Estático'};
+var OBJ={alcance:'Alcance',compartilhamento:'Compartilhamento',salvamento:'Salvamento',engajamento:'Engajamento',conversao:'Conversão'};
+var OBJ_METRIC={alcance:'Alcance (índice vs. mediana do formato)',compartilhamento:'Compartilhamentos ÷ alcance',salvamento:'Salvamentos ÷ alcance',engajamento:'Índice de interação ponderada',conversao:'(Visitas ao perfil + 2 × seguidores) ÷ alcance'};
+var LISTS={
+  temas:['Como preparar','Mitos e verdades','Ingredientes e rótulo','Rotina e bem-estar','Bastidores','Lançamento e oferta'],
+  hookTipos:['Pergunta','Número ou dado','Demonstração','Problema do dia a dia','Bastidores'],
+  ctas:['Salve para consultar depois','Envie para alguém','Comente sua dúvida','Link na bio','Sem CTA'],
+  estilos:['UGC no celular','Estúdio clean','Texto na tela','Tutorial','Lifestyle']
+};
+var DIMS=[['produto','Produto'],['tema','Tema'],['hookTipo','Tipo de hook'],['cta','CTA'],['estilo','Estilo criativo'],['faixaDur','Duração do Reel']];
+var DEFAULT_PROD=['5 MAG + L-Treonina','Cabelo, Pele e Unha','Colágeno Tipo II','Magnésio Inositol','NAC 600','Vit B12 + B9 + Ferro','Vitamina D3 + K2 MK-7','Juice Protein'].map(function(n,i){return {id:'p'+(i+1),nome:n,ativo:true};});
+var DEFAULT_CRIT=[
+  {id:'k1',tipo:'Obrigatório',texto:'Usar somente alegações de benefício que constam na lista positiva da IN nº 28/2018, sem variar o texto autorizado.'},
+  {id:'k2',tipo:'Obrigatório',texto:'Números nutricionais só entram se estiverem no rótulo (ex.: Juice Protein, 37 g de proteína por porção de 40 g).'},
+  {id:'k3',tipo:'Obrigatório',texto:'Quando o produto aparece em destaque, identificar como suplemento alimentar com a forma de apresentação (pó, cápsula).'},
+  {id:'k4',tipo:'Evitar',texto:'Prometer cura, tratamento, prevenção de doença, emagrecimento ou dizer que substitui medicamento (RDC 243/2018).'},
+  {id:'k5',tipo:'Evitar',texto:'Chamar o Juice Protein de "isolado" ou "isolada" sem ficha técnica do fabricante (a lista de ingredientes diz "hidrolisada").'},
+  {id:'k6',tipo:'Evitar',texto:'Afirmar que um conteúdo vai viralizar ou garantir resultado de alcance.'},
+  {id:'k7',tipo:'Tom',texto:'Informativo e conservador nos claims enquanto o tom de voz oficial não estiver definido.'},
+  {id:'k8',tipo:'Visual',texto:'Mostrar o produto real e a bebida como ela fica de verdade; evitar arte com aparência de IA.'}
+];
+
+/* ===================== Utilidades ===================== */
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function num(v){return (v==null||v===''||isNaN(v))?null:Number(v);}
+function fN(n){return n==null?'—':Number(n).toLocaleString('pt-BR',{maximumFractionDigits:0});}
+function fP(x,d){return x==null||!isFinite(x)?'—':(x*100).toLocaleString('pt-BR',{minimumFractionDigits:d==null?2:d,maximumFractionDigits:d==null?2:d})+'%';}
+function fI(x){return x==null||!isFinite(x)?'—':Math.round(x);}
+function fD(s){if(!s)return '—';var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
+function median(a){a=a.filter(function(x){return x!=null&&isFinite(x);}).sort(function(x,y){return x-y;});if(!a.length)return null;var m=Math.floor(a.length/2);return a.length%2?a[m]:(a[m-1]+a[m])/2;}
+function quant(a,q){a=a.filter(function(x){return x!=null&&isFinite(x);}).sort(function(x,y){return x-y;});if(!a.length)return null;var p=(a.length-1)*q,lo=Math.floor(p),hi=Math.ceil(p);return a[lo]+(a[hi]-a[lo])*(p-lo);}
+function uid(p){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function opts(list,val,empty){return (empty!=null?'<option value="">'+esc(empty)+'</option>':'')+list.map(function(o){var v=Array.isArray(o)?o[0]:o,l=Array.isArray(o)?o[1]:o;return '<option value="'+esc(v)+'"'+(String(v)===String(val)?' selected':'')+'>'+esc(l)+'</option>';}).join('');}
+function uniq(a){return a.filter(function(x,i){return x&&a.indexOf(x)===i;});}
+
+/* ===================== Cálculos ===================== */
+function M(c){return c.m||{};}
+function rates(c){var m=M(c),a=num(m.alcance);if(!a)return null;
+  var r={lk:(m.likes||0)/a,cm:(m.comentarios||0)/a,sh:(m.compartilhamentos||0)/a,sv:(m.salvamentos||0)/a,vis:(m.visitas||0)/a,seg:(m.seguidores||0)/a};
+  r.score=((m.likes||0)+2*(m.comentarios||0)+3*(m.compartilhamentos||0)+3*(m.salvamentos||0)+5*(m.seguidores||0))/a;
+  r.conv=((m.visitas||0)+2*(m.seguidores||0))/a; return r;}
+function metric(c,obj){var r=rates(c);if(!r)return null;
+  if(obj==='alcance')return num(M(c).alcance);
+  if(obj==='compartilhamento')return r.sh; if(obj==='salvamento')return r.sv; if(obj==='conversao')return r.conv; return r.score;}
+function faixaDur(c){var d=num(M(c).duracao);if(c.formato!=='reel'||d==null)return null;return d<15?'Até 14 s':d<=30?'15 a 30 s':d<=60?'31 a 60 s':'Mais de 60 s';}
+function dimVal(c,k){return k==='faixaDur'?faixaDur(c):c[k];}
+function filtered(){var f=UI.f;return S.conteudos.filter(function(c){return (!f.de||c.data>=f.de)&&(!f.ate||c.data<=f.ate)&&(!f.produto||c.produto===f.produto);});}
+function fmtStats(list,fmt,obj){var v=list.filter(function(c){return c.formato===fmt;}).map(function(c){return metric(c,obj);});
+  return {n:v.filter(function(x){return x!=null;}).length,med:median(v),p75:quant(v,.75),p90:quant(v,.9)};}
+function tier(val,st){if(val==null||st.med==null)return 'na';if(st.n>=4&&val>=st.p90)return 'top10';if(st.n>=4&&val>=st.p75)return 'top25';return val>=st.med?'acima':'abaixo';}
+var TIER_L={top10:'Top 10%',top25:'Top 25%',acima:'Acima da mediana',abaixo:'Abaixo da mediana',na:'Sem alcance'};
+function tierPill(t){return '<span class="pill p-'+t+'">'+TIER_L[t]+'</span>';}
+/* índice relativo: métrica do conteúdo ÷ mediana do próprio formato × 100 (permite comparar formatos diferentes) */
+function relIndex(list,obj){var meds={};FMTS.forEach(function(f){meds[f]=fmtStats(list,f,obj).med;});
+  var out={};list.forEach(function(c){var v=metric(c,obj),md=meds[c.formato];out[c.id]=(v!=null&&md)?v/md*100:null;});return out;}
+function groups(list,k,obj,ref){var map={};list.forEach(function(c){var g=dimVal(c,k),v=metric(c,obj);if(!g||v==null)return;(map[g]=map[g]||[]).push(c);});
+  return Object.keys(map).map(function(g){var cs=map[g],md=median(cs.map(function(c){return metric(c,obj);}));return {dim:k,val:g,n:cs.length,med:md,idx:ref?md/ref*100:null,items:cs};}).sort(function(a,b){return (b.idx||0)-(a.idx||0);});}
+function conf(n){return n>=3?'padrão':n===2?'indício':'caso isolado';}
+var COMP={lk:'curtidas',cm:'comentários',sh:'compartilhamentos',sv:'salvamentos',seg:'seguidores gerados'};
+var COMP_WHY={sv:'as pessoas guardam como referência',sh:'as pessoas querem mostrar o assunto a alguém',cm:'o conteúdo convida à conversa',lk:'agrada de imediato, mas não necessariamente gera ação',seg:'o conteúdo apresenta bem o perfil a quem ainda não segue'};
+function driver(items,all){var best=null;Object.keys(COMP).forEach(function(k){var g=median(items.map(function(c){var r=rates(c);return r&&r[k];})),b=median(all.map(function(c){var r=rates(c);return r&&r[k];}));if(g!=null&&b){var ratio=g/b;if(!best||Math.abs(Math.log(ratio))>Math.abs(Math.log(best.ratio)))best={k:k,ratio:ratio};}});return best;}
+function dimLabel(k){for(var i=0;i<DIMS.length;i++)if(DIMS[i][0]===k)return DIMS[i][1];return k;}
+function analyze(list,fmt,obj){
+  var L=list.filter(function(c){return c.formato===fmt&&metric(c,obj)!=null;});
+  var st=fmtStats(L,fmt,obj);
+  var gs={};DIMS.forEach(function(d){if(d[0]==='faixaDur'&&fmt!=='reel')return;gs[d[0]]=groups(L,d[0],obj,st.med);});
+  var all=[];Object.keys(gs).forEach(function(k){all=all.concat(gs[k]);});
+  var multi=all.filter(function(g){return g.n>=2&&g.idx!=null;});
+  var ok=multi.filter(function(g){return g.idx>=120;}).sort(function(a,b){return b.idx-a.idx;});
+  var ko=multi.filter(function(g){return g.idx<=80;}).sort(function(a,b){return a.idx-b.idx;});
+  var single=all.filter(function(g){return g.n===1&&g.idx>=130;}).sort(function(a,b){return b.idx-a.idx;});
+  var used=LISTS;var untried=[];
+  [['tema','temas'],['hookTipo','hookTipos'],['estilo','estilos'],['cta','ctas']].forEach(function(p){var have=(gs[p[0]]||[]).map(function(g){return g.val;});LISTS[p[1]].forEach(function(v){if(have.indexOf(v)<0)untried.push({dim:p[0],val:v});});});
+  var why=ok.slice(0,4).map(function(g){var d=driver(g.items,L);return {g:g,d:d};});
+  var dates=L.map(function(c){return c.data;}).sort();var weeks=dates.length>1?Math.max(1,(new Date(dates[dates.length-1])-new Date(dates[0]))/604800000):1;
+  var dow={};L.forEach(function(c){var d=new Date(c.data+'T12:00:00').getDay();(dow[d]=dow[d]||[]).push(metric(c,obj));});
+  return {L:L,st:st,gs:gs,ok:ok,ko:ko,single:single,untried:untried,why:why,freq:L.length/weeks,dow:dow};
+}
+
+/* ===================== Influenciadores: scores ===================== */
+function erBench(f){return f<10000?0.04:f<50000?0.025:f<200000?0.015:0.01;}
+function scoreInfl(i){
+  var pts=0,max=0,parts=[];function add(label,p,m){pts+=p;max+=m;parts.push([label,p,m]);}
+  var f=num(i.seguidores);var a=i.aval||{};
+  if(f&&num(i.mediaLikes)!=null){var er=((num(i.mediaLikes)||0)+(num(i.mediaComentarios)||0))/f;add('Engajamento público vs. faixa de tamanho',Math.min(1,er/erBench(f))*25,25);}
+  if(f&&num(i.mediaViews)!=null){add('Views de Reels ÷ seguidores',Math.min(1,num(i.mediaViews)/f/0.3)*10,10);}
+  var nAval=0;
+  [['estetica','Aderência estética à ALTUM',15],['wellness','Wellness / lifestyle',15],['qualidade','Qualidade visual',10],['naturalidade','Naturalidade da publicidade',10]].forEach(function(q){var v=num(a[q[0]]);if(v!=null){nAval++;add(q[1],(v-1)/4*q[2],q[2]);}});
+  var risco=num(a.risco);var pen=risco!=null?(risco-1)*5:0;
+  var pub=max?Math.max(0,(pts-pen)/max*100):null;
+  var v=i.verificado,ver=null,vparts=[];
+  if(v&&num(v.alcanceMedio)!=null&&f){var vp=pts,vm=max;function vadd(l,p,m){vp+=p;vm+=m;vparts.push([l,p,m]);}
+    vadd('Alcance médio ÷ seguidores (verificado)',Math.min(1,num(v.alcanceMedio)/f/0.25)*15,15);
+    if(num(v.views)!=null)vadd('Views médias ÷ seguidores (verificado)',Math.min(1,num(v.views)/f/0.3)*10,10);
+    if(num(v.alcanceStories)!=null)vadd('Alcance de Stories ÷ seguidores (verificado)',Math.min(1,num(v.alcanceStories)/f/0.08)*5,5);
+    ver=Math.max(0,(vp-pen)/vm*100);}
+  var base=ver!=null?ver:pub;var res=base==null?'AVALIAR':base>=70?'RECOMENDADO':base>=50?'AVALIAR':'NÃO RECOMENDADO';
+  var caps=[];
+  if(risco===5){res='NÃO RECOMENDADO';caps.push('risco de baixa aderência 5/5');}
+  else if(res==='RECOMENDADO'){
+    if(risco===4){res='AVALIAR';caps.push('risco de baixa aderência 4/5');}
+    else if(num(a.estetica)!=null&&num(a.estetica)<=2||num(a.wellness)!=null&&num(a.wellness)<=2){res='AVALIAR';caps.push('estética ou wellness com nota 2 ou menos');}
+    else if(nAval<2){res='AVALIAR';caps.push('avaliação da equipe incompleta (números públicos sozinhos não bastam)');}
+  }
+  return {pub:pub,ver:ver,res:res,parts:parts,vparts:vparts,pen:pen,risco:risco,caps:caps,nAval:nAval,base:ver!=null?'verificado':'público'};
+}
+function resPill(r){return '<span class="pill '+(r==='RECOMENDADO'?'p-rec':r==='AVALIAR'?'p-aval':'p-nao')+'">'+r+'</span>';}
+
+/* ===================== Dados (banco do artifact) ===================== */
+function prodList(){return S.produtos!=null?S.produtos:DEFAULT_PROD;}
+function prodAtivos(){return prodList().filter(function(p){return p.ativo!==false;}).map(function(p){return p.nome;});}
+/* opções de produto para filtros: cadastrados (inativos sinalizados) + nomes antigos ainda presentes nos conteúdos */
+function prodFiltro(){var L=prodList(),names=L.map(function(p){return p.nome;});
+  var o=L.map(function(p){return [p.nome,p.nome+(p.ativo===false?' (inativo)':'')];});
+  uniq(S.conteudos.map(function(c){return c.produto;})).forEach(function(n){if(names.indexOf(n)<0)o.push([n,n+' (fora do cadastro)']);});return o;}
+/* opções para campos de cadastro/escolha: só ativos, mantendo o valor atual se estiver inativo ou fora do cadastro */
+function prodEscolha(cur){var a=prodAtivos();if(cur&&a.indexOf(cur)<0)a=a.concat([cur]);return a;}
+async function saveProd(list){await Store.setList('produtos',list);}
+async function renameProd(id,novo){var L=prodList().map(function(p){return Object.assign({},p);});var p=L.find(function(x){return x.id===id;});if(!p)return;var old=p.nome;p.nome=novo;
+  await saveProd(L);
+  var cs=S.conteudos.filter(function(c){return c.produto===old;});
+  for(var i=0;i<cs.length;i++){var c=Object.assign({},cs[i]);c.produto=novo;await save('conteudos',c.id,c);}
+  if(UI.f.produto===old)UI.f.produto=novo;render();}
+function crits(){return (S.criterios&&S.criterios.length)?S.criterios:DEFAULT_CRIT;}
+/* ===================== Persistência centralizada ===================== */
+/* Um único ponto de gravação para todo o sistema.
+   - Arquivo HTML aberto no navegador: localStorage, chave única STORE_KEY (sobrevive a recarregar, fechar e reiniciar).
+   - Dentro do Claude (quando o banco do artifact responde): banco do artifact.
+   Nunca grava dados fictícios sozinho e nunca limpa o armazenamento automaticamente. */
+var STORE_KEY='altum-content-intelligence:v1';
+var APP_ID='ALTUM Content Intelligence';
+function asArr(x){return Array.isArray(x)?x:[];}
+var Store={
+  backend:null, locked:false, salvoEm:null,
+  dados:function(){return {conteudos:S.conteudos,influenciadores:S.infl,produtos:S.produtos,criterios:S.criterios,config:S.config||{}};},
+  snapshot:function(){return {app:APP_ID,formato:1,salvoEm:new Date().toISOString(),dados:JSON.parse(JSON.stringify(this.dados()))};},
+  apply:function(d){d=d||{};S.conteudos=asArr(d.conteudos);S.infl=asArr(d.influenciadores);S.produtos=Array.isArray(d.produtos)?d.produtos:null;S.criterios=Array.isArray(d.criterios)?d.criterios:null;S.config=(d.config&&typeof d.config==='object')?d.config:{};},
+  lsDisponivel:function(){try{var k='__altum_teste__';localStorage.setItem(k,'1');localStorage.removeItem(k);return true;}catch(e){return false;}},
+  lerLocal:function(){var raw=localStorage.getItem(STORE_KEY);if(raw==null)return null;return JSON.parse(raw);},
+  gravarLocal:function(){
+    if(this.locked)throw {code:'bloqueado',message:'Os dados salvos não puderam ser lidos; nada foi gravado para não sobrescrevê-los.'};
+    var snap=this.snapshot(),txt=JSON.stringify(snap);
+    try{localStorage.setItem(STORE_KEY,txt);}catch(e){throw {code:'armazenamento_cheio',message:'O navegador recusou a gravação (espaço cheio ou bloqueado).'};}
+    if(localStorage.getItem(STORE_KEY)!==txt)throw {code:'verificacao',message:'A gravação não pôde ser confirmada.'};
+    this.salvoEm=snap.salvoEm;
+  },
+  /* aplica uma mudança em memória e grava; se a gravação falhar, desfaz a mudança */
+  mudar:function(fn){
+    if(this.backend!=='local')return;
+    var antes=JSON.stringify(this.dados());
+    fn();
+    try{this.gravarLocal();}catch(e){this.apply(JSON.parse(antes));render();throw e;}
+    render();
+  },
+  saveDoc:async function(col,id,data){
+    var clean=JSON.parse(JSON.stringify(data));delete clean.id;
+    if(this.backend==='db'){await S.db.doc(col+'/'+id).set(clean);return;}
+    this.mudar(function(){var arr=col==='conteudos'?S.conteudos:S.infl;clean.id=id;var i=arr.findIndex(function(x){return x.id===id;});if(i>=0)arr[i]=clean;else arr.push(clean);});
+  },
+  delDoc:async function(col,id){
+    if(this.backend==='db'){await S.db.doc(col+'/'+id).delete();return;}
+    this.mudar(function(){var arr=col==='conteudos'?S.conteudos:S.infl;var i=arr.findIndex(function(x){return x.id===id;});if(i>=0)arr.splice(i,1);});
+  },
+  /* listas de configuração: 'produtos' e 'criterios' (null = voltar ao padrão) */
+  setList:async function(nome,list){
+    if(this.backend==='db'){var ref=S.db.doc('config/'+nome);if(list==null){S[nome]=null;await ref.delete();render();}else{S[nome]=list;var o={};o[nome==='produtos'?'lista':'regras']=list;await ref.set(o);}return;}
+    this.mudar(function(){S[nome]=list;});
+  },
+  /* preferências do sistema (aba aberta, filtros). Falha aqui nunca bloqueia o uso. */
+  saveConfig:function(){
+    S.config=Object.assign({},S.config||{},{aba:UI.tab,filtros:UI.f});
+    if(this.backend!=='local'||this.locked)return;
+    try{this.gravarLocal();}catch(e){}
+  },
+  replaceAll:async function(d){
+    if(this.backend==='db'){
+      var i;for(i=0;i<S.conteudos.length;i++)await S.db.doc('conteudos/'+S.conteudos[i].id).delete();
+      for(i=0;i<S.infl.length;i++)await S.db.doc('influenciadores/'+S.infl[i].id).delete();
+      var cs=asArr(d.conteudos),is=asArr(d.influenciadores);
+      for(i=0;i<cs.length;i++){var c=Object.assign({},cs[i]);var cid=c.id||uid('c_');delete c.id;await S.db.doc('conteudos/'+cid).set(c);}
+      for(i=0;i<is.length;i++){var n=Object.assign({},is[i]);var nid=n.id||uid('i_');delete n.id;await S.db.doc('influenciadores/'+nid).set(n);}
+      if(Array.isArray(d.produtos))await S.db.doc('config/produtos').set({lista:d.produtos});else await S.db.doc('config/produtos').delete();
+      if(Array.isArray(d.criterios))await S.db.doc('config/criterios').set({regras:d.criterios});else await S.db.doc('config/criterios').delete();
+      return;}
+    var self=this;this.locked=false;S.errMsg='';
+    this.mudar(function(){self.apply(d);});
+  },
+  clearAll:async function(){await this.replaceAll({conteudos:[],influenciadores:[],produtos:null,criterios:null,config:{}});}
+};
+async function save(col,id,data){await Store.saveDoc(col,id,data);}
+async function del(col,id){await Store.delDoc(col,id);}
+async function saveCrit(list){await Store.setList('criterios',list);}
+async function loadExamples(){var d=genDemo();
+  for(var i=0;i<d.conteudos.length;i++)await save('conteudos',d.conteudos[i].id,d.conteudos[i]);
+  for(var j=0;j<d.influenciadores.length;j++)await save('influenciadores',d.influenciadores[j].id,d.influenciadores[j]);}
+async function clearExamples(){var c=S.conteudos.filter(function(x){return x.exemplo;}),n=S.infl.filter(function(x){return x.exemplo;});
+  for(var i=0;i<c.length;i++)await del('conteudos',c[i].id);for(var j=0;j<n.length;j++)await del('influenciadores',n[j].id);}
+function setMode(m){S.mode=m;var el=document.getElementById('mode');
+  var txt=m==='db'?'Dados salvos no banco':m==='local'?'Dados salvos neste navegador':m==='sem-armazenamento'?'Este navegador bloqueou o armazenamento':'Carregando…';
+  el.innerHTML='<i class="dot'+(m==='db'||m==='local'?' on':m==='sem-armazenamento'?' demo':'')+'"></i><span>'+txt+'</span><button class="btn sm" data-act="settings" style="margin-left:6px">Configurações</button>';}
+function startLocal(){
+  Store.backend='local';
+  if(!Store.lsDisponivel()){Store.locked=true;setMode('sem-armazenamento');S.errMsg='Este navegador está bloqueando o armazenamento local (janela anônima ou dados do site bloqueados). Nada será salvo até isso ser liberado.';render();return;}
+  try{var o=Store.lerLocal();
+    if(o){Store.apply(o.dados||o);Store.salvoEm=o.salvoEm||null;
+      var cfg=S.config||{};if(cfg.aba&&TABS.some(function(t){return t[0]===cfg.aba;}))UI.tab=cfg.aba;if(cfg.filtros)UI.f=Object.assign({de:'',ate:'',produto:''},cfg.filtros);}
+  }catch(e){Store.locked=true;S.errMsg='Os dados salvos neste navegador não puderam ser lidos. Nada foi apagado nem sobrescrito. Importe um backup em Configurações, ou use "Apagar todos os dados" para recomeçar.';}
+  setMode('local');render();
+}
+(async function init(){
+  var db=null;
+  if(window.claude&&window.claude.use){try{db=await window.claude.use('db');}catch(e){db=null;}}
+  if(!db){startLocal();return;}
+  S.db=db;Store.backend='db';setMode('db');
+  var onErr=function(e){S.errMsg='Não foi possível ler o banco ('+(e&&e.code||'erro')+'). Recarregue a página.';render();};
+  db.collection('conteudos').onSnapshot(function(s){S.conteudos=s.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o;});render();},onErr);
+  db.collection('influenciadores').onSnapshot(function(s){S.infl=s.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o;});render();},onErr);
+  db.doc('config/produtos').onSnapshot(function(s){S.produtos=s.exists?(s.data().lista||[]):null;render();},onErr);
+  db.doc('config/criterios').onSnapshot(function(s){S.criterios=s.exists?(s.data().regras||null):null;render();},onErr);
+})();
+
+/* ===================== Configurações: backup ===================== */
+function backupText(){return JSON.stringify(Store.snapshot(),null,2);}
+function parseBackup(txt){var o;try{o=JSON.parse(txt);}catch(e){throw new Error('O arquivo não é um JSON válido.');}
+  var d=o&&o.dados?o.dados:o;
+  if(!d||typeof d!=='object'||(!Array.isArray(d.conteudos)&&!Array.isArray(d.influenciadores)))throw new Error('Este arquivo não parece ser um backup do ALTUM Content Intelligence.');
+  return {conteudos:asArr(d.conteudos),influenciadores:asArr(d.influenciadores),produtos:Array.isArray(d.produtos)?d.produtos:null,criterios:Array.isArray(d.criterios)?d.criterios:null,config:d.config||{},exportadoEm:o.salvoEm||null};}
+async function exportBackup(){
+  var txt=backupText(),nome='altum-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  if(Store.backend==='db'&&window.claude&&window.claude.use){var dl=null;try{dl=await window.claude.use('downloads');}catch(e){}
+    if(dl){await dl.save({filename:nome,data:new Blob([txt],{type:'application/json'})});return 'Backup gerado.';}}
+  var url=URL.createObjectURL(new Blob([txt],{type:'application/json'}));var a=document.createElement('a');a.href=url;a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},2000);
+  return 'Backup "'+nome+'" baixado.';}
+function openSettings(){
+  var n=S.conteudos.length,m=S.infl.length,ex=S.conteudos.some(function(c){return c.exemplo;})||S.infl.some(function(c){return c.exemplo;});
+  var where=Store.backend==='db'?'Os dados ficam no banco deste artifact no Claude.':'Os dados ficam salvos neste navegador, neste computador. Para levar para outro navegador ou computador, use o backup.';
+  var pend=UI.imp;
+  openModal('<div class="sechead"><h2>Configurações</h2><button class="btn" data-act="close">Fechar</button></div>'+
+   '<section class="panel"><h3>Armazenamento</h3><p class="small" style="margin:0">'+where+'</p><p class="small muted" style="margin:6px 0 0">'+n+' conteúdo(s) · '+m+' influenciador(es) · '+prodList().length+' produto(s)'+(Store.salvoEm?' · última gravação: '+new Date(Store.salvoEm).toLocaleString('pt-BR'):'')+'</p></section>'+
+   '<section class="panel"><h3>Exportar backup</h3><p class="small muted" style="margin:0 0 10px">Gera um arquivo .json com conteúdos, Insights, influenciadores, avaliações, dados verificados, produtos, critérios e configurações.</p><div class="row"><button class="btn pri" data-act="exportB">Exportar backup</button><span class="small" id="exp-msg"></span></div></section>'+
+   '<section class="panel"><h3>Importar backup</h3><p class="small muted" style="margin:0 0 10px">Restaura um arquivo exportado antes. Substitui todos os dados atuais.</p>'+
+    (pend?'<p class="small" style="margin:0 0 10px">Arquivo pronto: <b>'+pend.conteudos.length+'</b> conteúdo(s), <b>'+pend.influenciadores.length+'</b> influenciador(es)'+(pend.produtos?', <b>'+pend.produtos.length+'</b> produto(s)':'')+(pend.exportadoEm?', exportado em '+new Date(pend.exportadoEm).toLocaleString('pt-BR'):'')+'.</p><div class="row"><button class="btn pri" data-act="impB">Confirmar importação</button><button class="btn" data-act="impCancel">Cancelar</button></div>':
+     '<label>Arquivo .json<input type="file" id="imp-file" accept=".json,application/json"></label>')+'<p class="err" id="imp-err">'+esc(UI.impErr||'')+'</p></section>'+
+   (!ex&&!n&&!m?'<section class="panel"><h3>Dados de demonstração</h3><p class="small muted" style="margin:0 0 10px">Carrega conteúdos e perfis fictícios, marcados como exemplo, para conhecer as telas.</p><button class="btn" data-act="loadEx">Carregar exemplos fictícios</button></section>':'')+
+   '<section class="panel" style="border-color:var(--bad)"><h3>Apagar todos os dados</h3><p class="small muted" style="margin:0 0 10px">Remove conteúdos, influenciadores, produtos, critérios e configurações. Não dá para desfazer; exporte um backup antes.</p>'+
+    (UI.confirmAll?'<div class="row"><button class="btn danger" data-act="clearAll2">Sim, apagar tudo</button><button class="btn" data-act="clearAllCancel">Cancelar</button></div>':'<button class="btn danger" data-act="clearAll">Apagar todos os dados</button>')+'</section>');
+}
+/* ===================== Render ===================== */
+function renderTabs(){document.getElementById('tabs').innerHTML=TABS.map(function(t){return '<button role="tab" data-tab="'+t[0]+'" aria-selected="'+(UI.tab===t[0])+'">'+t[1]+'</button>';}).join('');}
+function render(){renderTabs();var m=document.getElementById('main');var fn={dashboard:vDash,conteudos:vCont,influenciadores:vInfl,criterios:vCrit,inteligencia:vIntel}[UI.tab];
+  var top=S.errMsg?'<div class="banner">'+esc(S.errMsg)+'</div>':'';
+  var ex=S.conteudos.some(function(c){return c.exemplo;})||S.infl.some(function(c){return c.exemplo;});
+  if(ex)top+='<div class="banner"><span><b>Dados fictícios de demonstração.</b> Os conteúdos e perfis marcados como exemplo servem só para mostrar as telas.</span>'+(UI.confirm==='clearEx'?'<span class="row"><button class="btn sm danger" data-act="clearEx2">Confirmar: apagar exemplos</button><button class="btn sm" data-act="cancel">Cancelar</button></span>':'<button class="btn sm" data-act="clearEx">Apagar exemplos</button>')+'</div>';
+  m.innerHTML='<div class="sec">'+top+fn()+'</div>';}
+function filterBar(){var prods=prodFiltro();
+  return '<div class="row"><label>De<input type="date" id="f-de" value="'+esc(UI.f.de)+'"></label><label>Até<input type="date" id="f-ate" value="'+esc(UI.f.ate)+'"></label><label>Produto<select id="f-produto">'+opts(prods,UI.f.produto,'Todos')+'</select></label>'+(UI.f.de||UI.f.ate||UI.f.produto?'<button class="btn" data-act="clearF">Limpar filtros</button>':'')+'</div>';}
+function emptyState(){return '<div class="empty"><h3>Nenhum conteúdo cadastrado ainda</h3><p>Cadastre um post já publicado com os Insights do Instagram, ou carregue os exemplos fictícios para ver as telas funcionando.</p><div class="row" style="justify-content:center"><button class="btn pri" data-act="newC">Cadastrar conteúdo</button><button class="btn" data-act="loadEx">Carregar exemplos fictícios</button></div></div>';}
+function bars(gs,max){max=max||Math.max.apply(null,gs.map(function(g){return g.idx||0;}).concat([150]));
+  return '<div class="blist">'+gs.map(function(g){return '<div class="bitem"><span class="lab" title="'+esc(g.val)+'">'+esc(g.val)+' <span class="muted small">n='+g.n+'</span></span><span class="bar'+(g.idx>=100?'':' acc')+'"><i style="width:'+Math.min(100,(g.idx||0)/max*100)+'%"></i></span><span class="v">'+fI(g.idx)+'</span></div>';}).join('')+'</div>';}
+
+function vDash(){
+  if(!S.conteudos.length)return '<div class="sechead"><h2>Dashboard</h2></div>'+emptyState();
+  var L=filtered();var dates=L.map(function(c){return c.data;}).sort();
+  var sum=function(k){return L.reduce(function(a,c){return a+(num(M(c)[k])||0);},0);};
+  var cnt=function(f){return L.filter(function(c){return c.formato===f;}).length;};
+  var rel=relIndex(L,'engajamento');
+  var withRel=L.filter(function(c){return rel[c.id]!=null;});
+  /* melhor formato: comparar índice relativo não serve (mediana = 100 por definição); usamos a taxa ponderada mediana, deixando claro que é por alcance */
+  var fmtMed=FMTS.map(function(f){return {f:f,med:fmtStats(L,f,'engajamento').med,n:fmtStats(L,f,'engajamento').n};}).filter(function(x){return x.n;}).sort(function(a,b){return b.med-a.med;});
+  var byRel=function(k){var map={};withRel.forEach(function(c){var g=c[k];if(!g)return;(map[g]=map[g]||[]).push(rel[c.id]);});return Object.keys(map).map(function(g){return {val:g,n:map[g].length,idx:median(map[g])};}).sort(function(a,b){return b.idx-a.idx;});};
+  var prods=byRel('produto'),temas=byRel('tema');
+  var bestOf=function(arr){var a=arr.filter(function(x){return x.n>=2;});return a[0]||arr[0];};
+  var bp=bestOf(prods),bt=bestOf(temas);
+  var sorted=withRel.slice().sort(function(a,b){return rel[b.id]-rel[a.id];});
+  var row=function(c){return '<tr><td>'+fD(c.data)+'</td><td>'+esc(c.nome)+'</td><td><span class="pill p-fmt">'+FMT[c.formato]+'</span></td><td class="n">'+fN(M(c).alcance)+'</td><td class="n">'+fI(rel[c.id])+'</td></tr>';};
+  var tbl=function(arr){return '<div class="tablewrap"><table><thead><tr><th>Data</th><th>Conteúdo</th><th>Formato</th><th class="n">Alcance</th><th class="n">Índice</th></tr></thead><tbody>'+arr.map(row).join('')+'</tbody></table></div>';};
+  var learn=[],opp=[];FMTS.forEach(function(f){var A=analyze(L,f,'engajamento');if(A.ok[0])learn.push(FMT[f]+': '+dimLabel(A.ok[0].dim).toLowerCase()+' "'+A.ok[0].val+'" ficou em '+fI(A.ok[0].idx)+' (n='+A.ok[0].n+', '+conf(A.ok[0].n)+').');
+    if(A.ko[0])learn.push(FMT[f]+': '+dimLabel(A.ko[0].dim).toLowerCase()+' "'+A.ko[0].val+'" ficou em '+fI(A.ko[0].idx)+' (n='+A.ko[0].n+').');
+    if(A.single[0])opp.push(FMT[f]+': repetir '+dimLabel(A.single[0].dim).toLowerCase()+' "'+A.single[0].val+'" para confirmar o resultado de '+fI(A.single[0].idx)+' (só 1 publicação).');
+    var u=A.untried.filter(function(x){return x.dim==='tema';})[0];if(u&&A.L.length)opp.push(FMT[f]+': tema "'+u.val+'" ainda não foi testado neste formato.');});
+  var under=prods.filter(function(p){return p.n<3;});if(under.length)opp.push('Produtos com pouca base de comparação (menos de 3 posts): '+under.map(function(p){return p.val;}).join(', ')+'.');
+  return '<div class="sechead"><div><div class="eyebrow">Período analisado</div><h2>'+(dates.length?fD(dates[0])+' a '+fD(dates[dates.length-1]):'Sem conteúdos no filtro')+'</h2></div>'+filterBar()+'</div>'+
+  '<div class="kpis">'+[['Conteúdos',L.length,1],['Reels',cnt('reel')],['Carrosséis',cnt('carrossel')],['Posts estáticos',cnt('estatico')],['Alcance total',sum('alcance'),1],['Visualizações (Reels)',sum('views')],['Compartilhamentos',sum('compartilhamentos')],['Salvamentos',sum('salvamentos')],['Comentários',sum('comentarios')],['Seguidores gerados',sum('seguidores'),1]].map(function(k){return '<div class="kpi'+(k[2]?' hl':'')+'"><span class="eyebrow">'+k[0]+'</span><b>'+fN(k[1])+'</b></div>';}).join('')+'</div>'+
+  '<div class="best">'+
+   '<div class="panel"><span class="eyebrow">Melhor formato</span><b>'+(fmtMed[0]?FMT[fmtMed[0].f]:'—')+'</b><span class="small muted">'+(fmtMed[0]?'Interação ponderada mediana de '+fP(fmtMed[0].med)+' do alcance. Formatos comparados por taxa, nunca por número absoluto.':'')+'</span></div>'+
+   '<div class="panel"><span class="eyebrow">Melhor produto</span><b>'+(bp?esc(bp.val):'—')+'</b><span class="small muted">'+(bp?'Índice '+fI(bp.idx)+' vs. mediana do próprio formato (100) · n='+bp.n+' · '+conf(bp.n):'')+'</span></div>'+
+   '<div class="panel"><span class="eyebrow">Melhor tema</span><b>'+(bt?esc(bt.val):'—')+'</b><span class="small muted">'+(bt?'Índice '+fI(bt.idx)+' · n='+bt.n+' · '+conf(bt.n):'')+'</span></div>'+
+  '</div>'+
+  '<div class="grid g2"><div class="panel"><h3>Produtos</h3>'+bars(prods)+'</div><div class="panel"><h3>Temas</h3>'+bars(temas)+'</div></div>'+
+  '<p class="note">Índice = interação ponderada do conteúdo ÷ mediana do seu próprio formato × 100. Interação ponderada = (curtidas + 2×comentários + 3×compartilhamentos + 3×salvamentos + 5×seguidores) ÷ alcance. Acima de 100 = acima da mediana do formato.</p>'+
+  '<div class="grid g2"><div><h3>Melhor desempenho</h3>'+tbl(sorted.slice(0,5))+'</div><div><h3>Pior desempenho</h3>'+tbl(sorted.slice(-5).reverse())+'</div></div>'+
+  '<div class="grid g2 ins"><div class="panel keep"><h3>Principais aprendizados</h3><ul>'+(learn.length?learn.slice(0,6).map(function(x){return '<li>'+esc(x)+'</li>';}).join(''):'<li class="muted">Ainda não há padrões com 2 ou mais publicações.</li>')+'</ul><p class="small muted">São associações nos dados, não prova de causa.</p></div>'+
+  '<div class="panel test"><h3>Principais oportunidades</h3><ul>'+(opp.length?opp.slice(0,6).map(function(x){return '<li>'+esc(x)+'</li>';}).join(''):'<li class="muted">Sem oportunidades claras no filtro atual.</li>')+'</ul></div></div>';
+}
+
+function vCont(){
+  var q=UI.lst.q.toLowerCase();var L=S.conteudos.filter(function(c){return (!UI.lst.fmt||c.formato===UI.lst.fmt)&&(!q||(c.nome+' '+c.produto+' '+c.tema+' '+c.hook).toLowerCase().indexOf(q)>=0);}).sort(function(a,b){return a.data<b.data?1:-1;});
+  var rel=relIndex(S.conteudos,'engajamento');var st={};FMTS.forEach(function(f){st[f]=fmtStats(S.conteudos,f,'engajamento');});
+  var head='<div class="sechead"><div><h2>Conteúdos publicados</h2><p class="muted small">'+S.conteudos.length+' cadastrados. Insights reais do Instagram; nenhuma métrica é obrigatória além do formato.</p></div><button class="btn pri" data-act="newC">Cadastrar conteúdo</button></div>';
+  if(!S.conteudos.length)return head+emptyState();
+  return head+'<div class="row"><label>Formato<select id="l-fmt">'+opts(FMTS.map(function(f){return [f,FMT[f]];}),UI.lst.fmt,'Todos')+'</select></label><label style="flex:1;min-width:200px">Buscar<input id="l-q" value="'+esc(UI.lst.q)+'" placeholder="Nome, produto, tema ou hook"></label></div>'+
+  '<div class="tablewrap"><table><thead><tr><th>Data</th><th>Conteúdo</th><th>Formato</th><th>Produto</th><th class="n">Alcance</th><th class="n">Salv./alc.</th><th class="n">Comp./alc.</th><th class="n">Índice</th><th>Faixa</th><th></th></tr></thead><tbody>'+
+  L.map(function(c){var r=rates(c);return '<tr><td>'+fD(c.data)+'</td><td>'+esc(c.nome)+(c.exemplo?' <span class="pill p-ex">exemplo</span>':'')+'<div class="small muted">'+esc(c.tema||'')+(c.hook?' · “'+esc(c.hook)+'”':'')+'</div></td><td><span class="pill p-fmt">'+FMT[c.formato]+'</span></td><td>'+esc(c.produto||'—')+'</td><td class="n">'+fN(M(c).alcance)+'</td><td class="n">'+(r?fP(r.sv):'—')+'</td><td class="n">'+(r?fP(r.sh):'—')+'</td><td class="n">'+fI(rel[c.id])+'</td><td>'+tierPill(tier(metric(c,'engajamento'),st[c.formato]))+'</td><td style="white-space:nowrap"><button class="btn sm pri" data-act="diagC" data-id="'+esc(c.id)+'">Ver análise</button> <button class="btn sm" data-act="editC" data-id="'+esc(c.id)+'">Editar</button> '+(UI.confirm==='c:'+c.id?'<button class="btn sm danger" data-act="delC2" data-id="'+esc(c.id)+'">Confirmar</button>':'<button class="btn sm danger" data-act="delC" data-id="'+esc(c.id)+'">Excluir</button>')+'</td></tr>';}).join('')+'</tbody></table></div>';
+}
+
+function vInfl(){
+  var h='<div class="sechead"><div><h2>Influenciadores</h2><p class="muted small">Public Score usa só dados públicos. Verified Score só aparece com mídia kit ou Insights enviados pela própria pessoa. Nenhuma métrica privada é estimada a partir do @.</p></div><button class="btn pri" data-act="newI">Cadastrar influenciador</button></div>';
+  if(!S.infl.length)return h+'<div class="empty">Nenhum perfil cadastrado. <button class="btn" data-act="newI">Cadastrar o primeiro</button></div>';
+  var L=S.infl.map(function(i){return {i:i,s:scoreInfl(i)};}).sort(function(a,b){var x=a.s.ver!=null?a.s.ver:a.s.pub||0,y=b.s.ver!=null?b.s.ver:b.s.pub||0;return y-x;});
+  return h+'<div class="grid g2">'+L.map(function(o){var i=o.i,s=o.s,v=i.verificado;
+    var er=num(i.seguidores)?(((num(i.mediaLikes)||0)+(num(i.mediaComentarios)||0))/num(i.seguidores)):null;
+    return '<div class="panel icard"><div class="hd"><div><b>'+esc(i.arroba)+'</b>'+(i.exemplo?' <span class="pill p-ex">exemplo</span>':'')+'<div class="small muted">'+esc(i.nome||'')+' · '+esc(i.nicho||'')+'</div></div>'+resPill(s.res)+'</div>'+
+    '<div class="scorebox"><div><span class="eyebrow">Public Score</span><b>'+fI(s.pub)+'</b></div><div><span class="eyebrow">Verified Score</span><b>'+(s.ver!=null?fI(s.ver):'—')+'</b><span class="small muted">'+(s.ver!=null?'com dados enviados':'sem dados verificados')+'</span></div></div>'+
+    '<div class="facts"><div><span>Seguidores</span><strong>'+fN(i.seguidores)+'</strong></div><div><span>Engaj. público</span><strong>'+fP(er)+'</strong></div><div><span>Views Reels</span><strong>'+fN(i.mediaViews)+'</strong></div><div><span>Formato principal</span><strong>'+esc(FMT_INFL[i.formatoPrincipal]||'—')+'</strong></div>'+(v&&num(v.alcanceMedio)!=null?'<div><span>Alcance médio (verif.)</span><strong>'+fN(v.alcanceMedio)+'</strong></div>':'')+(v&&v.faixaPrincipal?'<div><span>Faixa etária (verif.)</span><strong>'+esc(v.faixaPrincipal)+'</strong></div>':'')+'</div>'+
+    (s.caps.length?'<p class="note">Resultado limitado por: '+esc(s.caps.join('; '))+'.</p>':'')+
+    (i.observacoes?'<div class="small muted">'+esc(i.observacoes)+'</div>':'')+
+    '<details><summary class="small">Como o score foi calculado (base '+s.base+')</summary><div class="small" style="margin-top:6px">'+s.parts.concat(s.vparts).map(function(p){return esc(p[0])+': '+p[1].toFixed(1).replace('.',',')+' de '+p[2];}).join('<br>')+(s.pen?'<br>Penalidade de risco: −'+s.pen:'')+'<br><span class="muted">Itens não informados ficam fora da conta.</span></div></details>'+
+    '<div class="row"><button class="btn sm pri" data-act="diagI" data-id="'+esc(i.id)+'">Ver análise</button><button class="btn sm" data-act="editI" data-id="'+esc(i.id)+'">Editar</button>'+(UI.confirm==='i:'+i.id?'<button class="btn sm danger" data-act="delI2" data-id="'+esc(i.id)+'">Confirmar exclusão</button>':'<button class="btn sm danger" data-act="delI" data-id="'+esc(i.id)+'">Excluir</button>')+'</div></div>';}).join('')+'</div>'+
+  '<p class="note">Resultado: 70+ RECOMENDADO · 50 a 69 AVALIAR · abaixo de 50 NÃO RECOMENDADO. Usa o Verified Score quando existe; senão, o Public Score. Notas de 1 a 5 (estética, wellness, qualidade, naturalidade e risco) são avaliações da equipe. Sem pelo menos 2 notas da equipe, o resultado não passa de AVALIAR.</p>';
+}
+
+function vProd(){var L=prodList(),usos=function(n){return S.conteudos.filter(function(c){return c.produto===n;}).length;};
+  return '<div class="sechead"><div><h2>Produtos da ALTUM</h2><p class="muted small">Esta lista alimenta todos os campos, filtros e análises de produto. Produtos inativos somem dos cadastros e das recomendações, mas o histórico e os filtros continuam.</p></div></div>'+
+  (UI.perr?'<p class="err">'+esc(UI.perr)+'</p>':'')+'<div class="crit">'+(L.length?L.map(function(p){var n=usos(p.nome);
+    if(UI.pedit===p.id)return '<div class="it"><span class="pill p-fmt">Editando</span><input id="p-edit" value="'+esc(p.nome)+'" aria-label="Nome do produto"><span class="row"><button class="btn sm pri" data-act="savePE" data-id="'+esc(p.id)+'">Salvar</button><button class="btn sm" data-act="cancelPE">Cancelar</button></span></div>';
+    return '<div class="it"><span class="pill '+(p.ativo===false?'p-na':'p-acima')+'">'+(p.ativo===false?'Inativo':'Ativo')+'</span><span>'+esc(p.nome)+' <span class="small muted">· '+n+' conteúdo(s)</span></span><span class="row"><button class="btn sm" data-act="editP" data-id="'+esc(p.id)+'">Editar</button><button class="btn sm" data-act="togP" data-id="'+esc(p.id)+'">'+(p.ativo===false?'Ativar':'Desativar')+'</button>'+
+    (UI.confirm==='p:'+p.id?'<button class="btn sm danger" data-act="delP2" data-id="'+esc(p.id)+'">Confirmar exclusão'+(n?' ('+n+' conteúdo(s) mantêm o nome)':'')+'</button>':'<button class="btn sm danger" data-act="delP" data-id="'+esc(p.id)+'">Excluir</button>')+'</span></div>';}).join(''):'<div class="empty">Nenhum produto cadastrado.</div>')+'</div>'+
+  '<div class="panel"><h3>Adicionar produto</h3><div class="fgrid"><label class="full">Nome do produto<input id="p-novo" placeholder="Ex.: Ômega 3"></label></div><div class="row" style="margin-top:10px"><button class="btn pri" data-act="addP">Adicionar produto</button><span class="err" id="p-err"></span></div></div>';
+}
+function vCrit(){
+  var L=crits();
+  return vProd()+'<div class="sechead"><div><h2>Critérios da ALTUM</h2><p class="muted small">Regras de marca e compliance da ALTUM.'+(S.criterios?'':' Mostrando o conjunto padrão; edite para salvar a versão da equipe.')+'</p></div></div>'+
+  '<div class="crit">'+L.map(function(c){return '<div class="it"><span class="pill p-fmt">'+esc(c.tipo)+'</span><span>'+esc(c.texto)+'</span><button class="btn sm danger" data-act="delK" data-id="'+esc(c.id)+'">Remover</button></div>';}).join('')+'</div>'+
+  '<div class="panel"><h3>Adicionar critério</h3><div class="fgrid"><label>Tipo<select id="k-tipo">'+opts(['Obrigatório','Evitar','Tom','Visual'],'Obrigatório')+'</select></label><label class="full">Texto<input id="k-texto" placeholder="Ex.: Sempre mostrar o modo de preparo real"></label></div><div class="row" style="margin-top:10px"><button class="btn pri" data-act="addK">Adicionar</button>'+(S.criterios?'<button class="btn" data-act="resetK">Voltar ao padrão</button>':'')+'</div></div>'+
+  '<p class="note">Base regulatória: RDC nº 243/2018 e IN nº 28/2018 (Anvisa). As alegações por produto ainda precisam ser definidas com o RT antes de entrar em escala.</p>';
+}
+
+function contextPack(){
+  var L=S.conteudos;var out={sistema:'ALTUM Content Intelligence',gerado_em:new Date().toISOString(),aviso:'Interpretar padrões como associação, não causa. Não prometer viralização. Respeitar os critérios da marca.',total_conteudos:L.length,formatos:{},produtos:prodList().map(function(p){return {nome:p.nome,ativo:p.ativo!==false};}),criterios:crits().map(function(c){return c.tipo+': '+c.texto;}),influenciadores:S.infl.map(function(i){var s=scoreInfl(i);return {arroba:i.arroba,public_score:s.pub&&Math.round(s.pub),verified_score:s.ver&&Math.round(s.ver),resultado:s.res};})};
+  FMTS.forEach(function(f){var A=analyze(L,f,'engajamento');out.formatos[f]={publicacoes:A.L.length,mediana_interacao_ponderada:A.st.med,top25_corte:A.st.p75,
+    funcionou:A.ok.slice(0,5).map(function(g){return {dimensao:g.dim,valor:g.val,indice:Math.round(g.idx),n:g.n};}),
+    nao_funcionou:A.ko.slice(0,5).map(function(g){return {dimensao:g.dim,valor:g.val,indice:Math.round(g.idx),n:g.n};})};});
+  return out;}
+function vIntel(){
+  return '<div class="sechead"><div><h2>Inteligência</h2><p class="muted small">Estrutura pronta para uma IA interpretar os dados no futuro. Nesta etapa não há IA externa, Meta API nem scraping.</p></div></div>'+
+  '<div class="grid g2"><div class="panel plain"><h3>Como os dados estão organizados</h3><ul>'+
+  '<li><code>conteudos/&lt;id&gt;</code>: nome, data, formato, produto, campanha, tema, tipo de hook, hook, CTA, estilo, link do arquivo, legenda, <code>m</code> (alcance, views, likes, comentários, compartilhamentos, salvamentos, visitas, seguidores, tempo médio, retenção, conclusão, duração).</li>'+
+  '<li><code>influenciadores/&lt;id&gt;</code>: dados públicos, notas da equipe em <code>aval</code> e dados enviados pela pessoa em <code>verificado</code>.</li>'+
+  '<li><code>config/criterios</code>: regras de marca e compliance.</li>'+
+  '<li>Cálculos (taxas por alcance, mediana por formato, faixas, grupos, scores) rodam na página e não ficam gravados, então mudam junto com os dados.</li></ul></div>'+
+  '<div class="panel plain"><h3>Próximos passos para dados reais</h3><ul>'+
+  '<li>Cadastrar os posts reais e apagar os exemplos.</li>'+
+  '<li>Importar Insights: exportação CSV do Meta Business Suite, e depois a Instagram Graph API (conta Business + app Meta).</li>'+
+  '<li>Conectar um modelo de IA que recebe o pacote ao lado e devolve hipóteses e testes, sempre revisados contra os Critérios.</li>'+
+  '<li>Guardar o arquivo do criativo (vídeo/imagem) para análise visual futura.</li></ul></div></div>'+
+  '<div class="panel"><div class="sechead" style="margin-bottom:10px"><h3 style="margin:0">Pacote de contexto para a IA</h3><button class="btn" data-act="copyPack">Copiar JSON</button></div><pre id="pack">'+esc(JSON.stringify(contextPack(),null,2))+'</pre></div>';
+}
+
+/* ===================== Diagnóstico individual do conteúdo ===================== */
+/* Usa SOMENTE os dados do conteúdo selecionado. Nenhum benchmark, mediana ou ranking. */
+var NSI='Não há informação suficiente para avaliar este ponto com segurança.';
+var CTA_ACTION={'Salve para consultar depois':'sv','Envie para alguém':'sh','Comente sua dúvida':'cm','Link na bio':'vis'};
+var ACT_L={sv:'salvamentos',sh:'compartilhamentos',cm:'comentários',vis:'visitas ao perfil'};
+var TEMA_ACT={'Como preparar':['sv'],'Mitos e verdades':['sh','cm'],'Ingredientes e rótulo':['sv'],'Rotina e bem-estar':['sh'],'Bastidores':['vis'],'Lançamento e oferta':['vis']};
+var HOOK_ACT={'Pergunta':['cm'],'Número ou dado':['sv'],'Demonstração':['sh'],'Problema do dia a dia':['sh','cm'],'Bastidores':['vis']};
+var ESTILO_ACT={'UGC no celular':['cm','sh'],'Estúdio clean':[],'Texto na tela':['sv'],'Tutorial':['sv'],'Lifestyle':['sh']};
+function dv(m,k){var v=m[k];return (v==null||v===''||isNaN(v))?null:Number(v);}
+function ratio(a,b){return (a!=null&&b)?a/b:null;}
+function f1(x){return String(Math.round(x*10)/10).replace('.',',');}
+function per100(x){return x==null?'—':f1(x*100);}
+function diagCalc(c){
+  var m=M(c),reel=c.formato==='reel';
+  var d={alc:dv(m,'alcance'),views:reel?dv(m,'views'):null,lk:dv(m,'likes'),cm:dv(m,'comentarios'),sh:dv(m,'compartilhamentos'),sv:dv(m,'salvamentos'),vis:dv(m,'visitas'),seg:dv(m,'seguidores'),
+    tm:reel?dv(m,'tempoMedio'):null,ret:reel?dv(m,'retencao'):null,conc:reel?dv(m,'conclusao'):null,dur:reel?dv(m,'duracao'):null};
+  d.r={views:ratio(d.views,d.alc),lk:ratio(d.lk,d.alc),cm:ratio(d.cm,d.alc),sh:ratio(d.sh,d.alc),sv:ratio(d.sv,d.alc),vis:ratio(d.vis,d.alc),seg:ratio(d.seg,d.alc),segVis:ratio(d.seg,d.vis),tmDur:ratio(d.tm,d.dur)};
+  /* ação mais forte entre as ações "de valor" do próprio conteúdo */
+  var acts=['sv','sh','cm'].filter(function(k){return d[k]!=null;}).map(function(k){return {k:k,v:d[k]};}).sort(function(a,b){return b.v-a.v;});
+  d.acts=acts;d.top=acts.length&&acts[0].v>0?acts[0]:null;d.low=acts.length>=2?acts[acts.length-1]:null;
+  return d;
+}
+function diagHtml(c){
+  var d=diagCalc(c),reel=c.formato==='reel',F=FMT[c.formato];
+  var good=[],weak=[],why=[],keep=[],imp=[],tests=[],missing=[];
+  var sig={};/* sinais por métrica: 'pos' | 'neg' */
+  /* ---------- 1. Resultado ---------- */
+  var facts=[['Formato',F],['Produto',c.produto||'—'],['Tema',c.tema||'—'],['Tipo de hook',c.hookTipo||'—'],['CTA',c.cta||'—'],['Estilo criativo',c.estilo||'—']].concat(reel?[['Duração',d.dur!=null?d.dur+' s':'—']]:[]);
+  var nums=[['Alcance',fN(d.alc)]].concat(reel?[['Visualizações',fN(d.views)]]:[]).concat([['Likes',fN(d.lk)],['Comentários',fN(d.cm)],['Compartilhamentos',fN(d.sh)],['Salvamentos',fN(d.sv)],['Visitas ao perfil',fN(d.vis)],['Seguidores gerados',fN(d.seg)]]).concat(reel?[['Tempo médio',d.tm!=null?f1(d.tm)+' s':'—'],['Retenção',d.ret!=null?d.ret+'%':'—'],['Taxa de conclusão',d.conc!=null?d.conc+'%':'—']]:[]);
+  var calc=[].concat(reel?[['Visualizações ÷ alcance',d.r.views!=null?f1(d.r.views)+'×':'—']]:[]).concat([['Likes ÷ alcance',fP(d.r.lk)],['Comentários ÷ alcance',fP(d.r.cm)],['Compartilhamentos ÷ alcance',fP(d.r.sh)],['Salvamentos ÷ alcance',fP(d.r.sv)],['Visitas ao perfil ÷ alcance',fP(d.r.vis)],['Seguidores gerados ÷ alcance',fP(d.r.seg)],['Seguidores gerados ÷ visitas ao perfil',fP(d.r.segVis,1)]]).concat(reel?[['Tempo médio ÷ duração',d.r.tmDur!=null?Math.round(d.r.tmDur*100)+'% do vídeo':'—']]:[]);
+  var grid=function(a){return '<div class="facts">'+a.map(function(f){return '<div><span>'+f[0]+'</span><strong>'+esc(f[1])+'</strong></div>';}).join('')+'</div>';};
+  var s1=grid(facts)+'<div class="eyebrow" style="margin-top:12px">Métricas</div>'+grid(nums)+'<div class="eyebrow" style="margin-top:12px">Taxas calculadas</div>'+grid(calc);
+
+  /* ---------- 2 e 3. Sinais do próprio conteúdo ---------- */
+  if(reel&&d.r.views!=null){
+    if(d.r.views<1)weak.push('Visualizações ('+fN(d.views)+') abaixo do alcance ('+fN(d.alc)+'). Isso não costuma acontecer; vale conferir se os números foram copiados certos.');
+    else if(d.r.views>=1.2){good.push('<b>Visualizações ÷ alcance de '+f1(d.r.views)+'×</b>: cada conta alcançada viu o Reel em média '+f1(d.r.views)+' vezes. Pode indicar replay ou várias exposições à mesma pessoa.');sig.views='pos';}
+  }
+  if(reel&&d.r.tmDur!=null){var p=d.r.tmDur;
+    if(p>=1){good.push('<b>Tempo médio ('+f1(d.tm)+' s) maior que a duração ('+d.dur+' s)</b>: em média o vídeo foi assistido mais de uma vez inteiro.');sig.tm='pos';}
+    else if(p>=0.6){good.push('<b>'+Math.round(p*100)+'% do vídeo assistido em média</b> ('+f1(d.tm)+' s de '+d.dur+' s): a maior parte do conteúdo foi vista.');sig.tm='pos';}
+    else if(p<0.3){weak.push('<b>Só '+Math.round(p*100)+'% do vídeo assistido em média</b> ('+f1(d.tm)+' s de '+d.dur+' s): a maior parte do Reel não foi vista por quem começou.');sig.tm='neg';}
+  }
+  if(reel&&d.ret!=null){if(d.ret>=50){good.push('<b>Retenção de '+d.ret+'%</b>: metade ou mais da audiência ficou no vídeo.');sig.ret='pos';}else if(d.ret<30){weak.push('<b>Retenção de '+d.ret+'%</b>: menos de 1 em cada 3 pessoas ficou no vídeo.');sig.ret='neg';}}
+  if(reel&&d.conc!=null){if(d.conc>=50){good.push('<b>Taxa de conclusão de '+d.conc+'%</b>: metade ou mais chegou ao fim do Reel.');sig.conc='pos';}else if(d.conc<25){weak.push('<b>Taxa de conclusão de '+d.conc+'%</b>: 3 em cada 4 pessoas não chegaram ao fim. O que estiver no final (CTA, informação principal) foi pouco visto.');sig.conc='neg';}}
+  if(d.r.vis!=null&&d.r.vis>=0.02){good.push('<b>'+fP(d.r.vis)+' do alcance visitou o perfil</b> ('+fN(d.vis)+' visitas): sinal de curiosidade ou interesse gerado pelo conteúdo.');sig.vis='pos';}
+  if(d.r.segVis!=null&&d.vis>0){
+    if(d.r.segVis>=0.2){good.push('<b>'+fP(d.r.segVis,0)+' das visitas viraram seguidores</b> (1 em cada '+Math.max(1,Math.round(1/d.r.segVis))+'): quem chegou ao perfil teve forte interesse na marca ou no produto.');sig.seg='pos';}
+    else if(d.r.segVis<0.05){weak.push('<b>Só '+fP(d.r.segVis,1)+' das visitas viraram seguidores</b> ('+fN(d.seg)+' de '+fN(d.vis)+'): o conteúdo gerou curiosidade, mas o perfil não converteu essa visita em seguidor.');sig.seg='neg';}
+  }
+  if(d.top&&d.lk){var t=d.top;good.push('<b>Ação de destaque: '+ACT_L[t.k]+'</b>, com '+per100(t.v/d.lk)+' para cada 100 likes. É o tipo de valor que este conteúdo mais entregou.');sig.top=t.k;}
+  var ca=CTA_ACTION[c.cta];
+  if(ca&&ca!=='vis'&&d[ca]!=null&&d.acts.length>=2){
+    if(d.top&&d.top.k===ca){good.push('<b>O CTA foi atendido</b>: pediu '+ACT_L[ca]+' e essa foi a ação mais frequente entre salvamentos, compartilhamentos e comentários.');sig.cta='pos';}
+    else if(d.low&&d.low.k===ca){weak.push('<b>O CTA pediu '+ACT_L[ca]+'</b>, mas essa foi a ação menos frequente do conteúdo ('+fN(d[ca])+'). O pedido não se destacou.');sig.cta='neg';}
+  }
+  if(ca==='vis'&&sig.vis==='pos'){good.push('<b>O CTA para o perfil/link na bio</b> veio junto de um volume alto de visitas ao perfil.');sig.cta='pos';}
+  if(d.lk>0&&d.sv===0&&d.sh===0){weak.push('<b>Nenhum salvamento nem compartilhamento</b> apesar de '+fN(d.lk)+' likes: o conteúdo agradou, mas não deu motivo para guardar ou enviar.');sig.deep='neg';}
+  if(c.cta==='Comente sua dúvida'&&d.cm===0){weak.push('<b>O CTA pediu comentários e não houve nenhum.</b>');sig.cta='neg';}
+  weak.push('<b>Nível de likes, comentários, compartilhamentos e salvamentos por alcance</b>: '+NSI+' As taxas estão calculadas acima, mas sem referência não dá para dizer se são altas ou baixas.');
+  if(!good.length)good.push(NSI+' Nenhuma relação entre as métricas deste conteúdo se destaca de forma clara.');
+
+  /* ---------- 4. Por que pode ter acontecido (hipóteses) ---------- */
+  var hit=function(list){return (list||[]).filter(function(k){return d.top&&d.top.k===k||(k==='vis'&&sig.vis==='pos');});};
+  /* hook */
+  if(c.hookTipo||c.hook){var hx=c.hook||'';var feats=[];if(hx.indexOf('?')>=0)feats.push('é uma pergunta');if(/\d/.test(hx))feats.push('traz um número');var words=hx?hx.trim().split(/\s+/).length:0;if(words)feats.push('tem '+words+' palavras');
+    var hs='<li><b>Hook</b>'+(c.hookTipo?' ('+esc(c.hookTipo)+')':'')+(hx?': “'+esc(hx)+'”'+(feats.length?', '+feats.join(', '):''):'')+'. ';
+    if(reel&&(sig.tm||sig.ret||sig.views)){var pos=sig.tm==='pos'||sig.ret==='pos'||sig.views==='pos';hs+=pos?'Os sinais de atenção do vídeo são positivos; é possível que o começo tenha segurado quem chegou.':'Os sinais de atenção do vídeo são fracos; é possível que o começo não tenha prendido.';}
+    else{var hh=hit(HOOK_ACT[c.hookTipo]);hs+=hh.length?'Um hook desse tipo tende a puxar '+ACT_L[hh[0]]+', que foi justamente o destaque aqui.':(reel?'Sem tempo médio, retenção ou conclusão, não dá para ligar o hook à atenção do vídeo.':'Em '+F+' o hook atua na primeira tela; sem dados de deslize/abertura, a relação fica em aberto.');}
+    why.push(hs+'</li>');}
+  else why.push('<li><b>Hook</b>: não cadastrado. Sem ele, não dá para relacionar o começo do conteúdo com o resultado.</li>');
+  /* tema */
+  if(c.tema){var th=hit(TEMA_ACT[c.tema]);why.push('<li><b>Tema "'+esc(c.tema)+'"</b>: '+(TEMA_ACT[c.tema]?(th.length?'é um tema que tende a gerar '+ACT_L[th[0]]+', e isso apareceu como destaque. Hipótese: o assunto foi o que motivou essa ação.':'tende a gerar '+TEMA_ACT[c.tema].map(function(k){return ACT_L[k];}).join(' ou ')+(d.top?', mas o destaque aqui foi '+ACT_L[d.top.k]+'. O assunto pode não ter sido apresentado de um jeito que leve a essa ação.':'.')):'tema personalizado; não há relação esperada cadastrada para ele.')+'</li>');}
+  else why.push('<li><b>Tema</b>: não cadastrado.</li>');
+  /* CTA */
+  if(c.cta)why.push('<li><b>CTA "'+esc(c.cta)+'"</b>: '+(sig.cta==='pos'?'a ação pedida foi a que mais aconteceu. É provável que o pedido tenha ajudado, embora o tema também possa ter levado a isso.':sig.cta==='neg'?'a ação pedida ficou para trás. Pode ter faltado destaque visual para o pedido, ou ele apareceu tarde'+(sig.conc==='neg'?' (e poucos chegaram ao fim do Reel)':'')+'.':c.cta==='Sem CTA'?'sem pedido explícito, as ações vieram só do interesse espontâneo.':'não foi possível ligar o CTA a uma métrica específica deste conteúdo.')+'</li>');
+  else why.push('<li><b>CTA</b>: não cadastrado.</li>');
+  /* produto */
+  why.push('<li><b>Produto</b>'+(c.produto?' ('+esc(c.produto)+')':'')+': '+(sig.seg==='pos'?'a boa conversão de visitas em seguidores sugere interesse na marca ou no produto. ':'')+'Com um único conteúdo, o efeito do produto não pode ser separado do tema, do hook e do estilo.</li>');
+  /* estilo */
+  if(c.estilo){var eh=hit(ESTILO_ACT[c.estilo]);why.push('<li><b>Estilo "'+esc(c.estilo)+'"</b>: '+(eh.length?'é um estilo que tende a favorecer '+ACT_L[eh[0]]+', o destaque deste conteúdo.':ESTILO_ACT[c.estilo]&&ESTILO_ACT[c.estilo].length?'tende a favorecer '+ESTILO_ACT[c.estilo].map(function(k){return ACT_L[k];}).join(' ou ')+', que não foi o destaque aqui.':'não há relação clara entre este estilo e as métricas observadas.')+'</li>');}
+  else why.push('<li><b>Estilo criativo</b>: não cadastrado.</li>');
+  /* duração */
+  if(reel){if(d.dur!=null)why.push('<li><b>Duração de '+d.dur+' s</b>: '+(sig.tm==='neg'||sig.conc==='neg'?'a atenção caiu antes do fim. Um vídeo mais curto, ou com a informação principal antes, pode ajudar.':sig.tm==='pos'||sig.conc==='pos'?'a duração parece adequada ao assunto: boa parte do vídeo foi vista.':'sem tempo médio ou conclusão, não dá para ligar a duração ao resultado.')+'</li>');else why.push('<li><b>Duração</b>: não informada.</li>');}
+  /* legenda */
+  var leg=(c.legenda||'').trim();
+  if(leg){var lq=leg.indexOf('?')>=0,lc=c.cta&&c.cta!=='Sem CTA'&&leg.toLowerCase().indexOf(c.cta.toLowerCase().split(' ')[0])>=0,tags=(leg.match(/#\w+/g)||[]).length;
+    why.push('<li><b>Legenda</b> ('+leg.length+' caracteres'+(tags?', '+tags+' hashtag(s)':'')+'): '+(lq?'tem pergunta, o que pode ter estimulado comentários ('+fN(d.cm)+'). ':'não tem pergunta direta. ')+(lc?'Repete o CTA. ':'Não repete o CTA. ')+'O impacto da legenda não pode ser isolado das outras variáveis.</li>');}
+  else why.push('<li><b>Legenda</b>: não cadastrada.</li>');
+
+  /* ---------- 5. O que repetir ---------- */
+  if(c.hook&&(sig.tm==='pos'||sig.ret==='pos'||sig.views==='pos'))keep.push('<li>A estrutura do hook <b>“'+esc(c.hook)+'”</b>'+(c.hookTipo?' ('+esc(c.hookTipo)+')':'')+': veio junto de sinais positivos de atenção.</li>');
+  if(sig.cta==='pos')keep.push('<li>O CTA <b>"'+esc(c.cta)+'"</b>: a ação pedida foi a que mais aconteceu.</li>');
+  if(c.tema&&TEMA_ACT[c.tema]&&hit(TEMA_ACT[c.tema]).length)keep.push('<li>O tema <b>"'+esc(c.tema)+'"</b>: entregou a ação que se espera dele ('+ACT_L[hit(TEMA_ACT[c.tema])[0]]+').</li>');
+  if(c.estilo&&hit(ESTILO_ACT[c.estilo]).length)keep.push('<li>O estilo <b>"'+esc(c.estilo)+'"</b>: combinou com a ação de destaque.</li>');
+  if(reel&&d.dur!=null&&(sig.tm==='pos'||sig.conc==='pos'))keep.push('<li>A duração de <b>'+d.dur+' s</b> para este tipo de assunto.</li>');
+  if(sig.seg==='pos'||sig.vis==='pos')keep.push('<li>O ângulo que levou pessoas ao perfil'+(c.produto?' com o '+esc(c.produto):'')+': gerou visitas'+(sig.seg==='pos'?' que viraram seguidores':'')+'.</li>');
+  if(!keep.length)keep.push('<li class="muted">Nenhum elemento deste conteúdo está ligado a um sinal positivo claro. '+NSI+'</li>');
+
+  /* ---------- 6. O que melhorar ---------- */
+  if(sig.tm==='neg'||sig.ret==='neg')imp.push('<li><b>Atenção no vídeo</b>: mostrar o produto ou a promessa do vídeo nos 3 primeiros segundos, cortar pausas e manter um elemento novo a cada 2–3 segundos.</li>');
+  if(sig.conc==='neg')imp.push('<li><b>Fim do Reel</b>: como poucos chegaram ao fim, levar o CTA e a informação principal para antes da metade'+(d.dur!=null&&d.dur>30?' e testar uma versão mais curta que '+d.dur+' s':'')+'.</li>');
+  if(sig.cta==='neg')imp.push('<li><b>CTA</b>: colocar o pedido de '+ACT_L[ca]+' escrito na tela, não só falado ou na legenda, e dar um motivo concreto para a ação.</li>');
+  if(sig.deep==='neg')imp.push('<li><b>Motivo para salvar ou enviar</b>: incluir algo de consulta (modo de preparo, o que tem em cada porção conforme o rótulo, checklist) ou uma dúvida comum que a pessoa queira mandar para alguém.</li>');
+  if(sig.seg==='neg')imp.push('<li><b>Perfil</b>: revisar bio, destaques e posts fixados para que quem chega pelo conteúdo entenda rápido o que a Altum publica e tenha motivo para seguir.</li>');
+  if(!c.hook)imp.push('<li><b>Cadastro</b>: registrar o texto do hook para que o diagnóstico consiga relacioná-lo ao resultado.</li>');
+  if(!c.cta||c.cta==='Sem CTA')imp.push('<li><b>CTA</b>: este conteúdo não pediu nenhuma ação. Testar um pedido claro ligado ao objetivo (salvar, enviar, comentar ou ir ao perfil).</li>');
+  if(leg&&leg.indexOf('?')<0&&d.cm!=null&&d.top&&d.top.k!=='cm')imp.push('<li><b>Legenda</b>: terminar com uma pergunta simples e fácil de responder para abrir conversa.</li>');
+  if(!imp.length)imp.push('<li class="muted">Nenhuma fragilidade clara nas métricas deste conteúdo. Para evoluir, mude uma variável por vez na próxima publicação.</li>');
+
+  /* ---------- 7. Próximo teste ---------- */
+  var alvo=c.produto?'do '+esc(c.produto):c.tema?'do tema "'+esc(c.tema)+'"':'deste conteúdo';
+  if(sig.cta==='neg')tests.push({h:'Na próxima publicação '+alvo+', manter tema, hook e estilo e trocar só a forma do CTA (texto na tela, logo no início). Hipótese: '+ACT_L[ca]+' passa a ser a ação mais frequente.',m:ACT_L[ca].charAt(0).toUpperCase()+ACT_L[ca].slice(1)+' ÷ alcance acima de '+fP(d.r[ca])+' (valor deste conteúdo).'});
+  if((sig.tm==='neg'||sig.conc==='neg')&&d.dur!=null)tests.push({h:'Publicar a mesma ideia '+alvo+' em versão mais curta (até '+Math.max(10,Math.round(d.dur*0.6))+' s), com o produto nos 3 primeiros segundos. Hipótese: mais gente assiste até o fim.',m:(d.conc!=null?'Taxa de conclusão acima de '+d.conc+'%':'Tempo médio ÷ duração acima de '+Math.round(d.r.tmDur*100)+'%')+' (valor deste conteúdo).'});
+  if(sig.deep==='neg'&&tests.length<2)tests.push({h:'Repetir o tema '+(c.tema?'"'+esc(c.tema)+'" ':'')+alvo+' acrescentando um elemento de consulta (passo a passo ou dado do rótulo) e CTA "Salve para consultar depois". Hipótese: surgem salvamentos.',m:'Salvamentos ÷ alcance acima de 0% (este conteúdo não teve salvamentos).'});
+  if(tests.length<2&&d.top){var tk=d.top.k;tests.push({h:'Repetir o ângulo '+alvo+' que gerou '+ACT_L[tk]+(c.hookTipo?', mantendo o hook do tipo "'+esc(c.hookTipo)+'"':'')+', e mudar só '+(c.estilo?'o estilo criativo (hoje "'+esc(c.estilo)+'")':'o estilo criativo')+'. Hipótese: o destaque vem do assunto, não do estilo.',m:ACT_L[tk].charAt(0).toUpperCase()+ACT_L[tk].slice(1)+' ÷ alcance igual ou acima de '+fP(d.r[tk])+' (valor deste conteúdo).'});}
+  if(!tests.length)tests.push({h:'Publicar um novo conteúdo '+alvo+' mudando só o tipo de hook'+(c.hookTipo?' (hoje "'+esc(c.hookTipo)+'")':'')+'. Hipótese: o começo muda o quanto as pessoas interagem.',m:'Likes ÷ alcance e visitas ao perfil ÷ alcance acima dos valores deste conteúdo ('+fP(d.r.lk)+' e '+fP(d.r.vis)+').'});
+  var s7='<ol style="margin:0;padding-left:18px;display:grid;gap:8px">'+tests.slice(0,2).map(function(t){return '<li>'+t.h+'<br><span class="small muted">Como saber se funcionou: '+t.m+' Medir 7 dias após a publicação.</span></li>';}).join('')+'</ol>';
+
+  /* ---------- 8. Pontos sem dados suficientes ---------- */
+  var miss=function(cond,txt){if(cond)missing.push('<li>'+txt+'</li>');};
+  miss(d.alc==null,'<b>Alcance</b>: sem ele, nenhuma taxa por alcance pôde ser calculada.');
+  if(reel){miss(d.views==null,'<b>Visualizações</b>: sem a relação visualizações ÷ alcance (replay e múltiplas exposições).');
+    miss(d.tm==null,'<b>Tempo médio de visualização</b>: sem a análise de quanto do vídeo foi assistido.');
+    miss(d.dur==null,'<b>Duração do Reel</b>: sem tempo médio ÷ duração e sem análise da duração.');
+    miss(d.ret==null,'<b>Retenção</b>: sem a análise de quanto a audiência ficou no vídeo.');
+    miss(d.conc==null,'<b>Taxa de conclusão</b>: sem a análise de quantos chegaram ao fim (e se o CTA final foi visto).');}
+  miss(d.lk==null,'<b>Likes</b>.');miss(d.cm==null,'<b>Comentários</b>.');miss(d.sh==null,'<b>Compartilhamentos</b>.');miss(d.sv==null,'<b>Salvamentos</b>: sem eles, a ação de destaque pode estar incompleta.');
+  miss(d.vis==null,'<b>Visitas ao perfil</b>: sem análise de curiosidade nem de conversão em seguidores.');miss(d.seg==null,'<b>Seguidores gerados</b>: sem seguidores ÷ visitas.');
+  miss(d.vis===0,'<b>Seguidores ÷ visitas</b>: não calculável porque não houve visitas ao perfil.');
+  miss(!c.hook,'<b>Texto do hook</b>.');miss(!c.tema,'<b>Tema</b>.');miss(!c.cta,'<b>CTA</b>.');miss(!c.estilo,'<b>Estilo criativo</b>.');miss(!leg,'<b>Legenda</b>.');
+  if(!missing.length)missing.push('<li class="muted">Todas as métricas e informações usadas no diagnóstico foram preenchidas.</li>');
+
+  var ul=function(a){return '<ul>'+a.map(function(x){return x.indexOf('<li')===0?x:'<li>'+x+'</li>';}).join('')+'</ul>';};
+  var sec=function(n,t,h,cls){return '<section class="panel'+(cls?' '+cls:'')+'"><div class="eyebrow">'+n+'</div><h3>'+t+'</h3>'+h+'</section>';};
+  return sec('1','Resultado do conteúdo',s1)+
+   '<div class="grid g2 ins">'+sec('2','O que funcionou',ul(good),'ok')+sec('3','O que não funcionou',ul(weak),'ko')+'</div>'+
+   sec('4','Por que pode ter acontecido','<ul>'+why.join('')+'</ul><p class="small muted">Todas são hipóteses: um único conteúdo mostra associações entre elementos e métricas, não prova causa.</p>')+
+   '<div class="grid g2 ins">'+sec('5','O que repetir','<ul>'+keep.join('')+'</ul>','keep')+sec('6','O que melhorar','<ul>'+imp.join('')+'</ul>','test')+'</div>'+
+   sec('7','Próximo teste recomendado',s7)+
+   sec('8','Pontos sem dados suficientes','<ul>'+missing.join('')+'</ul>')+
+   '<p class="small muted">Critérios usados nesta tela (fixos, aplicados só a este conteúdo): visualizações ÷ alcance ≥ 1,2×; ≥ 60% do vídeo assistido (abaixo de 30% = atenção); retenção ≥ 50% (abaixo de 30% = atenção); conclusão ≥ 50% (abaixo de 25% = atenção); visitas ≥ 2% do alcance; ≥ 20% das visitas viram seguidores (abaixo de 5% = atenção).</p>';
+}
+function openDiag(id){var c=S.conteudos.find(function(x){return x.id===id;});if(!c)return;
+  openModal('<div class="sechead"><div><div class="eyebrow">Diagnóstico individual · '+FMT[c.formato]+' · '+fD(c.data)+'</div><h2>'+esc(c.nome)+'</h2>'+(c.hook?'<p class="small muted" style="margin:4px 0 0">Hook: “'+esc(c.hook)+'”</p>':'')+'</div><div class="row"><button class="btn" data-act="editC" data-id="'+esc(c.id)+'">Editar conteúdo</button><button class="btn" data-act="close">Fechar</button></div></div>'+diagHtml(c));}
+
+/* ===================== Diagnóstico individual do influenciador ===================== */
+/* Usa SOMENTE os dados cadastrados deste perfil + critérios da ALTUM. Sem comparação com outros perfis. */
+var NSD='Não há dados suficientes para avaliar este ponto.';
+var NICHO_OK=['bem-estar','bem estar','wellness','saúde','saude','fitness','treino','corrida','nutri','alimenta','receita','yoga','pilates','rotina','academia','esporte','longevidade','autocuidado','mindfulness','skincare'];
+var NICHO_NEUTRO=['lifestyle','moda','beleza','maternidade','viagem','decoração','casa','família'];
+var NICHO_RISCO=['cassino','aposta','bet','jogo de azar','emagrecimento rápido','milagre','bomba','anabolizante'];
+function nichoFit(n){n=(n||'').toLowerCase();if(!n)return null;
+  if(NICHO_RISCO.some(function(k){return n.indexOf(k)>=0;}))return 'risco';
+  if(NICHO_OK.some(function(k){return n.indexOf(k)>=0;}))return 'coerente';
+  if(NICHO_NEUTRO.some(function(k){return n.indexOf(k)>=0;}))return 'parcial';
+  return 'distante';}
+function tamanho(f){return f<10000?'nano (até 10 mil)':f<50000?'micro (10 a 50 mil)':f<200000?'médio (50 a 200 mil)':f<1000000?'macro (200 mil a 1 milhão)':'mega (1 milhão ou mais)';}
+function diagIHtml(i){
+  var a=i.aval||{},v=i.verificado||null,f=num(i.seguidores);
+  var lk=num(i.mediaLikes),cm=num(i.mediaComentarios),pv=num(i.mediaViews);
+  var vA=v?num(v.alcanceMedio):null,vV=v?num(v.views):null,vS=v?num(v.alcanceStories):null,vF=v&&v.faixaPrincipal?v.faixaPrincipal:'';
+  var hasVer=vA!=null||vV!=null||vS!=null||!!vF;
+  var r=function(x){return (x!=null&&f)?x/f:null;};
+  var R={lk:r(lk),cm:r(cm),pv:r(pv),vA:r(vA),vV:r(vV),vS:r(vS)};
+  var er=(lk!=null&&f)?((lk||0)+(cm||0))/f:null,bench=f?erBench(f):null;
+  var q=function(k){return num(a[k]);};
+  var nf=nichoFit(i.nicho);
+  var s=scoreInfl(i);
+  var pos=[],att=[];
+  /* ---------- 1. Resumo ---------- */
+  var grid=function(arr){return '<div class="facts">'+arr.map(function(x){return '<div><span>'+x[0]+'</span><strong>'+esc(x[1])+'</strong></div>';}).join('')+'</div>';};
+  var s1='<div class="eyebrow">Dados públicos</div>'+grid([['@',i.arroba||'—'],['Nome',i.nome||'—'],['Seguidores',fN(f)],['Nicho',i.nicho||'—'],['Média de likes',fN(lk)],['Média de comentários',fN(cm)],['Média de views de Reels',fN(pv)],['Formato com mais frequência e engajamento',FMT_INFL[i.formatoPrincipal]||'—']])+
+    '<div class="eyebrow" style="margin-top:12px">Dados verificados (mídia kit ou Insights enviados)</div>'+(hasVer?grid([['Faixa etária principal',vF||'—'],['Alcance médio',fN(vA)],['Views médias',fN(vV)],['Alcance médio de Stories',fN(vS)]]):'<p class="small muted" style="margin:4px 0 0">Nenhum dado verificado cadastrado. A análise abaixo usa só dados públicos e a avaliação da equipe.</p>')+
+    (i.observacoes?'<p class="small" style="margin-top:10px"><span class="muted">Observações:</span> '+esc(i.observacoes)+'</p>':'');
+  /* ---------- 2. Indicadores ---------- */
+  var ind=[['Média de likes ÷ seguidores',R.lk,'público'],['Média de comentários ÷ seguidores',R.cm,'público'],['Média de views de Reels ÷ seguidores',R.pv,'público'],['Alcance médio ÷ seguidores',R.vA,'verificado'],['Views médias verificadas ÷ seguidores',R.vV,'verificado'],['Alcance médio de Stories ÷ seguidores',R.vS,'verificado']];
+  var s2='<div class="tablewrap"><table><thead><tr><th>Indicador</th><th>Origem</th><th class="n">Valor</th></tr></thead><tbody>'+ind.map(function(x){return '<tr><td>'+x[0]+'</td><td><span class="pill '+(x[2]==='verificado'?'p-rec':'p-fmt')+'">'+x[2]+'</span></td><td class="n">'+(x[1]==null?'<span class="muted">sem dado</span>':fP(x[1]))+'</td></tr>';}).join('')+'</tbody></table></div>'+
+    (f?'':'<p class="note">Sem número de seguidores, nenhum indicador pôde ser calculado.</p>');
+  /* ---------- 3 e 4. Pontos positivos / de atenção ---------- */
+  var nota=function(k,label,posTxt,negTxt){var x=q(k);if(x==null){att.push('<b>'+label+'</b>: '+NSD+' (sem nota da equipe)');return;}
+    if(x>=4)pos.push('<b>'+label+' '+x+'/5</b>: '+posTxt);else if(x<=2)att.push('<b>'+label+' '+x+'/5</b>: '+negTxt);else att.push('<b>'+label+' '+x+'/5</b>: nota intermediária; vale revisar exemplos de posts antes de decidir.');};
+  nota('estetica','Aderência estética','visual compatível com a identidade da ALTUM.','visual distante da identidade da ALTUM; a marca pode parecer deslocada no feed.');
+  nota('wellness','Wellness / lifestyle','o conteúdo já gira em torno de bem-estar e rotina, contexto natural para suplementação.','pouca relação com bem-estar; suplemento pode soar fora de contexto.');
+  nota('qualidade','Qualidade visual','produção cuidada, coerente com uma marca premium.','qualidade visual abaixo do esperado para uma marca premium.');
+  nota('naturalidade','Naturalidade da publicidade','publis parecem parte da rotina, sem tom de anúncio forçado.','publis parecem forçadas; a recomendação tende a soar como anúncio.');
+  var risco=q('risco');if(risco==null)att.push('<b>Risco de baixa aderência</b>: '+NSD+' (sem nota da equipe)');else if(risco>=4)att.push('<b>Risco de baixa aderência '+risco+'/5</b>: a equipe vê risco alto de o perfil não combinar com a ALTUM.');else if(risco<=2)pos.push('<b>Risco de baixa aderência '+risco+'/5</b>: a equipe não vê riscos relevantes.');
+  if(nf==='coerente')pos.push('<b>Nicho "'+esc(i.nicho)+'"</b>: coerente com suplementação e bem-estar.');
+  else if(nf==='parcial')att.push('<b>Nicho "'+esc(i.nicho)+'"</b>: só parcialmente ligado a bem-estar; a entrada do produto precisa de contexto.');
+  else if(nf==='distante')att.push('<b>Nicho "'+esc(i.nicho)+'"</b>: sem relação clara com bem-estar ou nutrição.');
+  else if(nf==='risco')att.push('<b>Nicho "'+esc(i.nicho)+'"</b>: tema de risco para associação com suplemento.');
+  else att.push('<b>Nicho</b>: '+NSD);
+  if(f)pos.push('<b>Tamanho</b>: perfil '+tamanho(f)+'. O tamanho define custo e alcance potencial, mas não é sinal de qualidade por si só.');else att.push('<b>Tamanho do perfil</b>: '+NSD);
+  if(er!=null){if(er>=bench)pos.push('<b>Engajamento público de '+fP(er)+'</b> (likes + comentários ÷ seguidores): igual ou acima da referência fixa de '+fP(bench,1)+' para perfis '+tamanho(f).split(' (')[0]+'.');
+    else if(er<bench/2)att.push('<b>Engajamento público de '+fP(er)+'</b>: menos da metade da referência fixa de '+fP(bench,1)+' para perfis '+tamanho(f).split(' (')[0]+'. Pode indicar audiência pouco ativa.');
+    else att.push('<b>Engajamento público de '+fP(er)+'</b>: abaixo da referência de '+fP(bench,1)+', mas não muito distante.');}
+  else att.push('<b>Engajamento público</b>: '+NSD);
+  if(lk&&cm!=null){var cl=cm/lk;if(cl>=0.05)pos.push('<b>Conversa ativa</b>: '+f1(cl*100)+' comentários para cada 100 likes; a audiência responde ao que ela publica.');else if(cl<0.02)att.push('<b>Pouca conversa</b>: '+f1(cl*100)+' comentários para cada 100 likes.');}
+  if(R.pv!=null){if(R.pv>=0.3)pos.push('<b>Views públicas de Reels</b> equivalentes a '+fP(R.pv,0)+' dos seguidores: os vídeos circulam bem.');else if(R.pv<0.1)att.push('<b>Views públicas de Reels</b> equivalentes a só '+fP(R.pv,1)+' dos seguidores.');}
+  else att.push('<b>Views públicas de Reels</b>: '+NSD);
+  if(hasVer){
+    if(R.vA!=null){if(R.vA>=0.25)pos.push('<b>Alcance médio verificado</b> de '+fP(R.vA,0)+' dos seguidores.');else if(R.vA<0.1)att.push('<b>Alcance médio verificado</b> de só '+fP(R.vA,1)+' dos seguidores.');}
+    if(R.vS!=null){if(R.vS>=0.08)pos.push('<b>Stories verificados</b> alcançam '+fP(R.vS,1)+' dos seguidores; bom canal para link e cupom.');else if(R.vS<0.03)att.push('<b>Stories verificados</b> alcançam só '+fP(R.vS,1)+' dos seguidores.');}
+    if(pv!=null&&vV!=null&&pv>0&&Math.abs(vV/pv-1)>0.3)att.push('<b>Diferença entre views públicas ('+fN(pv)+') e verificadas ('+fN(vV)+')</b>: confirmar com a pessoa a que período e formato os números se referem.');
+  } else att.push('<b>Dados verificados</b>: '+NSD+' Alcance, Stories e público não foram enviados.');
+  var risk=(i.observacoes||'').toLowerCase();if(NICHO_RISCO.some(function(k){return risk.indexOf(k)>=0;}))att.push('<b>Observações</b> citam tema de risco para a marca. Revisar antes de qualquer contato.');
+  /* ---------- 5. Fit ---------- */
+  var est=q('estetica'),wel=q('wellness'),qual=q('qualidade'),nat=q('naturalidade');
+  var lv=function(x,hi,mid,lo){return x==null?NSD:x>=4?hi:x<=2?lo:mid;};
+  var fitScore=[est,wel,qual,nat].filter(function(x){return x!=null;});var fitAvg=fitScore.length?fitScore.reduce(function(p,c){return p+c;},0)/fitScore.length:null;
+  var combina=fitAvg==null?NSD+' A equipe ainda não avaliou o perfil.':(fitAvg>=4&&nf!=='distante'&&nf!=='risco'?'Combina: as notas da equipe são altas e o nicho é '+(nf||'não informado')+'.':fitAvg<=2.5||nf==='risco'?'Não combina: as notas da equipe são baixas'+(nf==='risco'?' e o nicho envolve tema de risco':'')+'.':'Combina em parte: notas intermediárias'+(nf?' e nicho '+nf:'')+'.');
+  var premium=(est==null||qual==null)?NSD+' (faltam notas de estética ou qualidade visual)':(est>=4&&qual>=4&&(risco==null||risco<=2))?'Sim: estética e qualidade visual altas, sem risco relevante. O produto aparece bem em um feed assim.':(est<=2||qual<=2||risco>=4)?'Não no momento: estética, qualidade ou risco não sustentam o posicionamento premium.':'Parcialmente: dá para testar com briefing visual bem definido.';
+  var s5='<ul>'+
+    '<li><b>Combina com a ALTUM?</b> '+combina+'</li>'+
+    '<li><b>Estética</b>: '+lv(est,'compatível com a ALTUM.','parcialmente compatível; precisa de briefing visual.','pouco compatível.')+'</li>'+
+    '<li><b>Nicho</b>: '+(nf==null?NSD:nf==='coerente'?'coerente com suplementação e bem-estar.':nf==='parcial'?'parcialmente coerente; o produto precisa entrar pela rotina da pessoa.':nf==='risco'?'envolve tema de risco para a marca.':'pouco coerente com suplementação.')+'</li>'+
+    '<li><b>Adequado para suplementação premium?</b> '+premium+'</li>'+
+    '<li><b>Comunicação natural para publicidade?</b> '+lv(nat,'Sim, a recomendação tende a soar genuína.','Em parte; vale ver publis anteriores.','Não; as publis parecem forçadas.')+'</li>'+
+    '<li><b>Compliance</b>: qualquer conteúdo precisa seguir os Critérios da ALTUM (só alegações da IN nº 28/2018, sem promessa de cura, tratamento ou emagrecimento). Incluir isso no briefing.</li></ul>';
+  /* ---------- 6. Decisão ---------- */
+  var why=[];
+  if(s.caps.length)why.push('Resultado limitado por: '+s.caps.join('; ')+'.');
+  why.push('Pontuação '+(s.base==='verificado'?'com dados verificados: '+fI(s.ver):'com dados públicos: '+fI(s.pub))+' de 100 (70+ recomendado, 50 a 69 avaliar). Ela combina engajamento, views e as notas da equipe; seguidores sozinhos não entram na conta.');
+  if(fitAvg!=null)why.push('Média das notas de fit da equipe: '+f1(fitAvg)+' de 5.');
+  if(!hasVer)why.push('Sem dados verificados, a decisão se apoia só em dados públicos.');
+  var s6='<div style="margin-bottom:8px">'+resPill(s.res)+'</div><ul>'+why.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>';
+  /* ---------- 7. Tipo de parceria ---------- */
+  var tipo,mot;
+  if(!f||(fitAvg==null&&er==null)){tipo=null;}
+  else if(s.res==='NÃO RECOMENDADO'){tipo='Não abordar neste momento';mot='O perfil não passou nos critérios de fit ou de risco da ALTUM.';}
+  else if(s.res==='RECOMENDADO'&&hasVer){tipo='Parceria principal';mot='Fit alto com a marca e números confirmados por dados enviados pela própria pessoa.';}
+  else if(s.res==='RECOMENDADO'){tipo='Teste inicial';mot='O fit é bom, mas os números são só públicos. Um teste pago menor confirma o resultado antes de um contrato maior.';}
+  else if(fitAvg==null||s.nAval<2){tipo='Envio de produto';mot='Ainda falta avaliação da equipe. Enviar o produto, sem compromisso de post, mostra como a pessoa reage e comunica naturalmente.';}
+  else if(er!=null&&er>=bench){tipo='Afiliada/comissão';mot='A audiência responde bem, mas o fit não está confirmado. Pagar por resultado reduz o risco para a ALTUM.';}
+  else{tipo='Envio de produto';mot='Sinais mistos. Enviar o produto e observar se o conteúdo espontâneo combina com a marca antes de investir.';}
+  var s7=tipo?'<p style="margin:0"><b>'+tipo+'</b>. '+mot+'</p>':'<p class="muted" style="margin:0">'+NSD+' Preencha seguidores e pelo menos as notas da equipe ou a média de likes.</p>';
+  /* ---------- 8. O que validar ---------- */
+  var val=[];
+  if(!hasVer)val.push('Mídia kit ou print dos Insights dos últimos 30 dias');
+  if(vA==null)val.push('Alcance médio por publicação');
+  if(vS==null)val.push('Alcance médio de Stories');
+  if(!vF)val.push('Faixa etária principal do público');
+  if(vV==null)val.push('Views médias dos Reels (dado verificado)');
+  if(pv==null)val.push('Média de views públicas de Reels');
+  if(lk==null)val.push('Média de likes');
+  if(cm==null)val.push('Média de comentários');
+  if(!i.formatoPrincipal)val.push('Formato com mais frequência e engajamento');
+  [['estetica','Aderência estética'],['wellness','Wellness / lifestyle'],['qualidade','Qualidade visual'],['naturalidade','Naturalidade da publicidade'],['risco','Risco de baixa aderência']].forEach(function(x){if(q(x[0])==null)val.push('Nota da equipe: '+x[1]);});
+  var s8=val.length?'<ul>'+val.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ul>':'<p class="muted" style="margin:0">Todos os dados usados nesta análise já foram preenchidos.</p>';
+  var sec=function(n,t,h,cls){return '<section class="panel'+(cls?' '+cls:'')+'"><div class="eyebrow">'+n+'</div><h3>'+t+'</h3>'+h+'</section>';};
+  var ul=function(x){return x.length?'<ul>'+x.map(function(y){return '<li>'+y+'</li>';}).join('')+'</ul>':'<p class="muted small">'+NSD+'</p>';};
+  return sec('1','Resumo do perfil',s1)+sec('2','Indicadores calculados',s2)+
+    '<div class="grid g2 ins">'+sec('3','Pontos positivos',ul(pos),'ok')+sec('4','Pontos de atenção',att.length?ul(att):'<p class="muted small">Nenhum ponto de atenção identificado com os dados cadastrados.</p>','ko')+'</div>'+
+    sec('5','Fit com a ALTUM',s5)+'<div class="grid g2 ins">'+sec('6','Vale a pena fechar parceria?',s6,'keep')+sec('7','Tipo de parceria sugerida',s7,'test')+'</div>'+
+    sec('8','O que validar antes de fechar',s8)+
+    '<p class="small muted">Critérios fixos desta tela: engajamento de referência por tamanho (até 10 mil: 4%; 10 a 50 mil: 2,5%; 50 a 200 mil: 1,5%; acima: 1%); views de Reels ≥ 30% dos seguidores; alcance verificado ≥ 25%; Stories ≥ 8%; notas da equipe 4–5 positivas e 1–2 de atenção. Nenhum outro influenciador é usado na análise.</p>';
+}
+function openDiagI(id){var i=S.infl.find(function(x){return x.id===id;});if(!i)return;
+  openModal('<div class="sechead"><div><div class="eyebrow">Diagnóstico Individual do Influenciador</div><h2>'+esc(i.arroba||'')+'</h2>'+(i.nome?'<p class="small muted" style="margin:4px 0 0">'+esc(i.nome)+(i.nicho?' · '+esc(i.nicho):'')+'</p>':'')+'</div><div class="row"><button class="btn" data-act="editI" data-id="'+esc(i.id)+'">Editar influenciador</button><button class="btn" data-act="close">Fechar</button></div></div>'+diagIHtml(i));}
+
+/* ===================== Formulários ===================== */
+function fld(id,label,val,type,extra){return '<label'+(extra&&extra.full?' class="full"':'')+'>'+label+'<input id="'+id+'" type="'+(type||'text')+'"'+(type==='number'?' min="0" step="any" inputmode="decimal"':'')+' value="'+esc(val==null?'':val)+'"'+(extra&&extra.ph?' placeholder="'+esc(extra.ph)+'"':'')+'></label>';}
+function sel(id,label,list,val,empty){return '<label>'+label+'<select id="'+id+'">'+opts(list,val,empty)+'</select></label>';}
+function dl(id,list){return '<datalist id="'+id+'">'+list.map(function(x){return '<option value="'+esc(x)+'">';}).join('')+'</datalist>';}
+function openModal(html){var m=document.getElementById('modal');m.innerHTML='<div class="dlg" role="dialog" aria-modal="true">'+html+'</div>';m.hidden=false;var f=m.querySelector('input,select');if(f)f.focus();}
+function closeModal(){var m=document.getElementById('modal');m.hidden=true;m.innerHTML='';}
+function formC(c){c=c||{formato:'reel',data:new Date().toISOString().slice(0,10),m:{}};var m=c.m||{};
+  var mf=function(k,l,ph){return fld('m-'+k,l,m[k],'number',{ph:ph});};
+  openModal('<div class="sechead"><h2>'+(c.id?'Editar conteúdo':'Cadastrar conteúdo publicado')+'</h2><button class="btn" data-act="close">Fechar</button></div>'+
+  '<fieldset><legend>Conteúdo</legend><div class="fgrid">'+fld('c-nome','Nome *',c.nome,'text',{full:1})+fld('c-data','Data de publicação *',c.data,'date')+sel('c-formato','Formato *',FMTS.map(function(f){return [f,FMT[f]];}),c.formato)+
+  sel('c-produto','Produto relacionado',prodEscolha(c.produto),c.produto||'','Sem produto')+fld('c-campanha','Campanha',c.campanha)+
+  '<label>Tema<input id="c-tema" list="dl-t" value="'+esc(c.tema||'')+'"></label><label>Tipo de hook<input id="c-hookTipo" list="dl-h" value="'+esc(c.hookTipo||'')+'"></label>'+
+  fld('c-hook','Hook (primeira frase ou tela)',c.hook,'text',{full:1})+'<label>CTA<input id="c-cta" list="dl-c" value="'+esc(c.cta||'')+'"></label><label>Estilo criativo<input id="c-estilo" list="dl-e" value="'+esc(c.estilo||'')+'"></label>'+
+  fld('c-arquivo','Arquivo do conteúdo (link do post, Drive etc.)',c.arquivo,'url',{full:1,ph:'https://'})+'<label class="full">Legenda<textarea id="c-legenda">'+esc(c.legenda||'')+'</textarea></label></div></fieldset>'+
+  '<fieldset><legend>Insights reais do Instagram</legend><p class="small muted" style="margin:0">Nenhuma métrica é obrigatória. Sem alcance, o conteúdo não entra nas comparações por taxa.</p><div class="fgrid">'+
+  '<span id="reelOnly1" style="display:contents">'+mf('views','Visualizações')+'</span>'+mf('alcance','Alcance')+mf('likes','Likes')+mf('comentarios','Comentários')+mf('compartilhamentos','Compartilhamentos')+mf('salvamentos','Salvamentos')+mf('visitas','Visitas ao perfil')+mf('seguidores','Seguidores gerados')+
+  '<span id="reelOnly2" style="display:contents">'+mf('duracao','Duração do Reel (s)')+mf('tempoMedio','Tempo médio de visualização (s)')+mf('retencao','Retenção (%)')+mf('conclusao','Taxa de conclusão (%)','se disponível')+'</span></div></fieldset>'+
+  '<div class="row"><button class="btn pri" data-act="saveC" data-id="'+esc(c.id||'')+'">Salvar conteúdo</button><button class="btn" data-act="close">Cancelar</button><span class="err" id="f-err"></span></div>'+
+  dl('dl-t',LISTS.temas)+dl('dl-h',LISTS.hookTipos)+dl('dl-c',LISTS.ctas)+dl('dl-e',LISTS.estilos));
+  toggleReel();}
+function toggleReel(){var f=document.getElementById('c-formato');if(!f)return;var on=f.value==='reel';['reelOnly1','reelOnly2'].forEach(function(id){var el=document.getElementById(id);if(el)el.hidden=!on;});}
+function val(id){var el=document.getElementById(id);return el?el.value.trim():'';}
+async function submitC(id){
+  var nome=val('c-nome'),data=val('c-data'),formato=val('c-formato');var err=document.getElementById('f-err');
+  if(!nome||!data||!formato){err.textContent='Preencha nome, data e formato.';return;}
+  var keys=['views','alcance','likes','comentarios','compartilhamentos','salvamentos','visitas','seguidores','duracao','tempoMedio','retencao','conclusao'];var m={};
+  for(var i=0;i<keys.length;i++){var k=keys[i];if(formato!=='reel'&&['views','duracao','tempoMedio','retencao','conclusao'].indexOf(k)>=0)continue;var raw=val('m-'+k).replace(',','.');if(raw===''){m[k]=null;continue;}var n=Number(raw);if(isNaN(n)||n<0){err.textContent='Valor inválido em "'+k+'". Use só números.';return;}m[k]=n;}
+  if(m.alcance!=null&&m.likes!=null&&m.likes>m.alcance*1.5){err.textContent='Likes muito acima do alcance. Confira os números.';return;}
+  var old=id?S.conteudos.find(function(x){return x.id===id;}):null;
+  var c={nome:nome,data:data,formato:formato,produto:val('c-produto'),campanha:val('c-campanha'),tema:val('c-tema'),hookTipo:val('c-hookTipo'),hook:val('c-hook'),cta:val('c-cta'),estilo:val('c-estilo'),arquivo:val('c-arquivo'),legenda:val('c-legenda'),m:m,exemplo:old?!!old.exemplo:false,atualizadoEm:new Date().toISOString()};
+  try{await save('conteudos',id||uid('c_'),c);closeModal();}catch(e){err.textContent='Não foi possível salvar ('+(e&&e.code||'erro')+'). Tente de novo.';}
+}
+function formI(i){i=i||{aval:{}};var a=i.aval||{},v=i.verificado||{};
+  var rate=function(k,l){return sel('a-'+k,l,[['1','1'],['2','2'],['3','3'],['4','4'],['5','5']],a[k]==null?'':String(a[k]),'Não avaliado');};
+  openModal('<div class="sechead"><h2>'+(i.id?'Editar influenciador':'Cadastrar influenciador')+'</h2><button class="btn" data-act="close">Fechar</button></div>'+
+  '<fieldset><legend>Dados públicos</legend><div class="fgrid">'+fld('i-arroba','@ do Instagram *',i.arroba,'text',{ph:'@perfil'})+fld('i-nome','Nome',i.nome)+fld('i-seguidores','Seguidores',i.seguidores,'number')+fld('i-nicho','Nicho',i.nicho)+fld('i-mediaLikes','Média de likes',i.mediaLikes,'number')+fld('i-mediaComentarios','Média de comentários',i.mediaComentarios,'number')+fld('i-mediaViews','Média de views públicas de Reels',i.mediaViews,'number',{ph:'se disponível'})+sel('i-formatoPrincipal','Formato com mais frequência e engajamento',[['reels','Reels'],['carrossel','Carrossel'],['estatico','Post Estático']],i.formatoPrincipal||'','Selecione')+'<label class="full">Observações<textarea id="i-observacoes">'+esc(i.observacoes||'')+'</textarea></label></div></fieldset>'+
+  '<fieldset><legend>Avaliação da equipe (1 a 5)</legend><div class="fgrid">'+rate('estetica','Aderência estética à ALTUM')+rate('wellness','Wellness / lifestyle')+rate('qualidade','Qualidade visual')+rate('naturalidade','Naturalidade da publicidade')+rate('risco','Risco de baixa aderência (5 = alto)')+'</div></fieldset>'+
+  '<fieldset><legend>Dados verificados — mídia kit ou Insights enviados</legend><p class="small muted" style="margin:0">Preencha só com dados que a própria pessoa enviou. Sem alcance médio, o Verified Score não é calculado.</p><div class="fgrid">'+fld('v-faixaPrincipal','Faixa etária principal',v.faixaPrincipal,'text',{ph:'25–34'})+fld('v-alcanceMedio','Alcance médio',v.alcanceMedio,'number')+fld('v-views','Views médias',v.views,'number')+fld('v-alcanceStories','Alcance médio de Stories',v.alcanceStories,'number')+'</div></fieldset>'+
+  '<div class="row"><button class="btn pri" data-act="saveI" data-id="'+esc(i.id||'')+'">Salvar influenciador</button><button class="btn" data-act="close">Cancelar</button><span class="err" id="f-err"></span></div>');}
+async function submitI(id){var err=document.getElementById('f-err');var ar=val('i-arroba');if(!ar){err.textContent='Informe o @ do Instagram.';return;}if(ar[0]!=='@')ar='@'+ar;
+  var n=function(x){var r=val(x).replace(',','.');return r===''?null:Number(r);};
+  var old=id?S.infl.find(function(x){return x.id===id;}):null;
+  /* campos que saíram do formulário continuam gravados no registro (não são apagados) */
+  var aval=Object.assign({},old&&old.aval||{});['estetica','wellness','qualidade','naturalidade','risco'].forEach(function(k){var r=val('a-'+k);aval[k]=r===''?null:Number(r);});
+  var ver=Object.assign({},old&&old.verificado||{},{faixaPrincipal:val('v-faixaPrincipal'),alcanceMedio:n('v-alcanceMedio'),views:n('v-views'),alcanceStories:n('v-alcanceStories')});
+  var hasV=Object.keys(ver).some(function(k){return ver[k]!=null&&ver[k]!=='';});
+  var o=Object.assign({},old||{},{arroba:ar,nome:val('i-nome'),seguidores:n('i-seguidores'),nicho:val('i-nicho'),mediaLikes:n('i-mediaLikes'),mediaComentarios:n('i-mediaComentarios'),mediaViews:n('i-mediaViews'),formatoPrincipal:val('i-formatoPrincipal')||null,observacoes:val('i-observacoes'),aval:aval,verificado:hasV?ver:null,exemplo:old?!!old.exemplo:false});
+  if([o.seguidores,o.mediaLikes,o.mediaComentarios,o.mediaViews,ver.alcanceMedio,ver.views,ver.alcanceStories].some(function(x){return x!=null&&(isNaN(x)||x<0);})){err.textContent='Use só números positivos nos campos numéricos.';return;}
+  try{var nid=id||uid('i_');await save('influenciadores',nid,o);closeModal();}catch(e){err.textContent='Não foi possível salvar ('+(e&&e.code||'erro')+').';}}
+
+/* ===================== Eventos ===================== */
+document.addEventListener('click',async function(e){
+  var t=e.target.closest('[data-tab],[data-act]');if(!t)return;
+  if(t.dataset.tab){UI.tab=t.dataset.tab;UI.confirm=null;Store.saveConfig();render();window.scrollTo(0,0);return;}
+  var a=t.dataset.act,id=t.dataset.id;
+  try{
+  if(a==='close'){closeModal();UI.imp=null;UI.impErr='';UI.confirmAll=false;}
+  else if(a==='settings'){UI.imp=null;UI.impErr='';UI.confirmAll=false;openSettings();}
+  else if(a==='exportB'){var msg=await exportBackup();var em=document.getElementById('exp-msg');if(em)em.textContent=msg;}
+  else if(a==='impCancel'){UI.imp=null;openSettings();}
+  else if(a==='impB'){var d=UI.imp;UI.imp=null;await Store.replaceAll(d);closeModal();}
+  else if(a==='clearAll'){UI.confirmAll=true;openSettings();}
+  else if(a==='clearAllCancel'){UI.confirmAll=false;openSettings();}
+  else if(a==='clearAll2'){UI.confirmAll=false;await Store.clearAll();UI.f={de:'',ate:'',produto:''};closeModal();}
+  else if(a==='cancel'){UI.confirm=null;render();}
+  else if(a==='newC')formC();
+  else if(a==='diagC')openDiag(id);
+  else if(a==='diagI')openDiagI(id);
+  else if(a==='editC')formC(S.conteudos.find(function(x){return x.id===id;}));
+  else if(a==='saveC')await submitC(id);
+  else if(a==='delC'){UI.confirm='c:'+id;render();}
+  else if(a==='delC2'){UI.confirm=null;await del('conteudos',id);}
+  else if(a==='newI')formI();
+  else if(a==='editI')formI(S.infl.find(function(x){return x.id===id;}));
+  else if(a==='saveI')await submitI(id);
+  else if(a==='delI'){UI.confirm='i:'+id;render();}
+  else if(a==='delI2'){UI.confirm=null;await del('influenciadores',id);}
+  else if(a==='loadEx'){t.disabled=true;t.textContent='Carregando…';await loadExamples();if(!document.getElementById('modal').hidden)closeModal();}
+  else if(a==='clearEx'){UI.confirm='clearEx';render();}
+  else if(a==='clearEx2'){UI.confirm=null;await clearExamples();}
+  else if(a==='clearF'){UI.f={de:'',ate:'',produto:''};Store.saveConfig();render();}
+  else if(a==='addK'){var tx=val('k-texto');if(!tx)return;await saveCrit(crits().concat([{id:uid('k'),tipo:val('k-tipo'),texto:tx}]));}
+  else if(a==='delK'){await saveCrit(crits().filter(function(c){return c.id!==id;}));}
+  else if(a==='resetK'){await Store.setList('criterios',null);}
+  else if(a==='addP'){var nm=val('p-novo'),pe=document.getElementById('p-err');if(!nm){pe.textContent='Digite o nome do produto.';return;}
+    if(prodList().some(function(p){return p.nome.toLowerCase()===nm.toLowerCase();})){pe.textContent='Esse produto já está cadastrado.';return;}
+    await saveProd(prodList().concat([{id:uid('p'),nome:nm,ativo:true}]));}
+  else if(a==='editP'){UI.pedit=id;UI.confirm=null;render();var ip=document.getElementById('p-edit');if(ip)ip.focus();}
+  else if(a==='cancelPE'){UI.pedit=null;UI.perr='';render();}
+  else if(a==='savePE'){var nn=val('p-edit');if(!nn)return;var cur=prodList().find(function(p){return p.id===id;});
+    if(prodList().some(function(p){return p.id!==id&&p.nome.toLowerCase()===nn.toLowerCase();})){UI.perr='Já existe um produto chamado "'+nn+'".';render();return;}
+    UI.pedit=null;UI.perr='';if(cur&&cur.nome!==nn)await renameProd(id,nn);else render();}
+  else if(a==='togP'){await saveProd(prodList().map(function(p){return p.id===id?Object.assign({},p,{ativo:p.ativo===false}):p;}));}
+  else if(a==='delP'){UI.confirm='p:'+id;render();}
+  else if(a==='delP2'){UI.confirm=null;await saveProd(prodList().filter(function(p){return p.id!==id;}));}
+  else if(a==='copyPack'){var txt=document.getElementById('pack').textContent;try{await navigator.clipboard.writeText(txt);t.textContent='Copiado';}catch(x){var r=document.createRange();r.selectNodeContents(document.getElementById('pack'));var s=getSelection();s.removeAllRanges();s.addRange(r);t.textContent='Texto selecionado';}}
+  }catch(err){S.errMsg='A ação não foi concluída: '+(err&&err.message||err&&err.code||'erro')+'. Tente de novo.';render();}
+});
+document.addEventListener('change',function(e){var id=e.target.id;
+  if(id==='f-de'||id==='f-ate'||id==='f-produto'){UI.f[id.slice(2)]=e.target.value;Store.saveConfig();render();}
+  else if(id==='imp-file'){var fl=e.target.files&&e.target.files[0];if(!fl)return;var fr=new FileReader();fr.onload=function(){try{UI.imp=parseBackup(String(fr.result));UI.impErr='';}catch(err){UI.imp=null;UI.impErr=err.message;}openSettings();};fr.onerror=function(){UI.impErr='Não foi possível ler o arquivo.';openSettings();};fr.readAsText(fl);}
+  else if(id==='l-fmt'){UI.lst.fmt=e.target.value;render();}
+  else if(id==='c-formato')toggleReel();});
+var qT;document.addEventListener('input',function(e){if(e.target.id==='l-q'){clearTimeout(qT);var v=e.target.value;qT=setTimeout(function(){UI.lst.q=v;render();var el=document.getElementById('l-q');if(el){el.focus();el.setSelectionRange(v.length,v.length);}},250);}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!document.getElementById('modal').hidden)closeModal();});
+renderTabs();
+</script>
+
+</body>
+</html>
