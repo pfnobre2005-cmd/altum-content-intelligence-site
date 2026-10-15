@@ -3,11 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-</head>
-<body>
+<meta name="robots" content="noindex,nofollow">
 <title>ALTUM Content Intelligence</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -36,7 +33,13 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .brand{font-family:var(--f-display);font-weight:800;font-stretch:78%;font-size:30px;letter-spacing:.01em;line-height:1;text-transform:uppercase}
 .brand span{color:var(--accent)}
 .brand small{display:block;font-family:var(--f-body);font-stretch:100%;font-weight:500;font-size:12px;letter-spacing:.08em;color:var(--muted);margin-top:6px;text-transform:uppercase}
-.mode{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.mode{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.gate{max-width:420px;margin:48px auto 0;width:100%}
+.gatecard{display:grid;gap:12px;padding:24px}
+.gateform{display:grid;gap:12px;margin-top:4px}
+.gateform .btn{justify-self:start}
+#login-err:empty{display:none}
+.migrate{border-color:var(--accent);border-width:2px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
 .dot.on{background:var(--good)} .dot.demo{background:var(--warn)}
 nav.tabs{display:flex;gap:2px;overflow-x:auto;margin:14px 0 22px;border-bottom:1px solid var(--line);scrollbar-width:thin}
@@ -127,13 +130,16 @@ pre{background:var(--surface);border:1px solid var(--line);border-radius:6px;pad
 @media (max-width:560px){.reco .step{grid-template-columns:1fr;gap:4px}.bitem{grid-template-columns:minmax(0,1fr) 70px 46px}.brand{font-size:24px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
-
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
+</head>
+<body>
 <div class="wrap">
   <header class="top">
     <div class="brand">ALTUM <span>Content</span> Intelligence<small>Altum Nutrition · análise de conteúdos publicados no Instagram</small></div>
-    <div class="mode" id="mode"><i class="dot"></i><span>Conectando ao banco…</span></div>
+    <div class="mode" id="mode"></div>
   </header>
-  <nav class="tabs" role="tablist" id="tabs"></nav>
+  <nav class="tabs" role="tablist" id="tabs" hidden></nav>
   <main id="main"><div class="empty">Carregando…</div></main>
 </div>
 <div id="modal" hidden></div>
@@ -204,7 +210,7 @@ if(typeof module!=='undefined') module.exports=genDemo;
 
 
 /* ===================== Estado ===================== */
-var S={conteudos:[],infl:[],criterios:null,produtos:null,config:{},mode:'loading',db:null,errMsg:''};
+var S={conteudos:[],infl:[],criterios:null,produtos:null,config:{},phase:'boot',readonly:false,errMsg:''};
 var UI={tab:'dashboard',f:{de:'',ate:'',produto:''},lst:{fmt:'',q:''},confirm:null,pedit:null};
 var TABS=[['dashboard','Dashboard'],['conteudos','Conteúdos'],['influenciadores','Influenciadores'],['criterios','Critérios da ALTUM'],['inteligencia','Inteligência']];
 var FMT={reel:'Reel',carrossel:'Carrossel',estatico:'Post Estático'};
@@ -333,102 +339,271 @@ async function renameProd(id,novo){var L=prodList().map(function(p){return Objec
   for(var i=0;i<cs.length;i++){var c=Object.assign({},cs[i]);c.produto=novo;await save('conteudos',c.id,c);}
   if(UI.f.produto===old)UI.f.produto=novo;render();}
 function crits(){return (S.criterios&&S.criterios.length)?S.criterios:DEFAULT_CRIT;}
-/* ===================== Persistência centralizada ===================== */
-/* Um único ponto de gravação para todo o sistema.
-   - Arquivo HTML aberto no navegador: localStorage, chave única STORE_KEY (sobrevive a recarregar, fechar e reiniciar).
-   - Dentro do Claude (quando o banco do artifact responde): banco do artifact.
-   Nunca grava dados fictícios sozinho e nunca limpa o armazenamento automaticamente. */
-var STORE_KEY='altum-content-intelligence:v1';
+/* ===================== Persistência compartilhada (Supabase) ===================== */
+/* Fonte oficial: public.altum_app_state, linha id = 1, coluna data (JSONB) com o estado completo.
+   - Só usa a chave pública (publishable). Nunca colocar secret key / service_role neste arquivo.
+   - Toda alteração vira uma "operação" (criar/editar/excluir um item). As operações são aplicadas na tela na hora,
+     ficam numa fila e são enviadas juntas (debounce) gravando o estado completo.
+   - Antes de gravar, o banco confere a versão (updated_at). Se outra pessoa gravou antes, a gravação é recusada,
+     o estado novo é baixado e as operações pendentes são reaplicadas por cima, item a item. Se a mesma pessoa e
+     outra editaram o MESMO item, a versão da nuvem é mantida e o usuário decide (nada é sobrescrito em silêncio).
+   - localStorage: só cache/backup de emergência (inclui operações ainda não enviadas). Nunca é a fonte principal. */
+var SB_URL='https://zfeogifcixqtmkdecgze.supabase.co';
+var SB_KEY='sb_publishable_3lbjBZuHaTzukgQXxQx5-A_9QnXaoC4';
+var SB_TABLE='altum_app_state',SB_ROW=1;
+var LEGACY_KEY='altum-content-intelligence:v1';   /* dados da versão anterior (só local). Nunca apagado automaticamente. */
+var CACHE_KEY='altum-ci:cache-nuvem:v1';          /* cópia do último estado da nuvem + operações pendentes */
+var PREFS_KEY='altum-ci:preferencias:v1';         /* aba aberta e filtros: preferência deste navegador */
 var APP_ID='ALTUM Content Intelligence';
+var LISTCOLS=['produtos','criterios'];
+var sb=null;
 function asArr(x){return Array.isArray(x)?x:[];}
+function clone(x){return x==null?x:JSON.parse(JSON.stringify(x));}
+function canon(x){if(Array.isArray(x))return x.map(canon);if(x&&typeof x==='object'){var o={};Object.keys(x).sort().forEach(function(k){if(x[k]!==undefined)o[k]=canon(x[k]);});return o;}return x;}
+function same(a,b){return JSON.stringify(canon(a==null?null:a))===JSON.stringify(canon(b==null?null:b));}
+function lsGet(k){try{var r=localStorage.getItem(k);return r==null?null:JSON.parse(r);}catch(e){return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){return false;}}
+function lsDel(k){try{localStorage.removeItem(k);}catch(e){}}
+
+/* ---------- estado ---------- */
+function normState(d){d=(d&&typeof d==='object')?d:{};if(d.dados&&typeof d.dados==='object')d=d.dados;
+  return {conteudos:asArr(d.conteudos),influenciadores:asArr(d.influenciadores),produtos:Array.isArray(d.produtos)?d.produtos:null,criterios:Array.isArray(d.criterios)?d.criterios:null,config:(d.config&&typeof d.config==='object'&&!Array.isArray(d.config))?d.config:{}};}
+function hasReal(d){d=normState(d);return d.conteudos.length>0||d.influenciadores.length>0||Array.isArray(d.produtos)||Array.isArray(d.criterios);}
+function stateFromS(){return {conteudos:S.conteudos,influenciadores:S.infl,produtos:S.produtos,criterios:S.criterios,config:S.config||{}};}
+function applyToS(st){st=normState(st);S.conteudos=st.conteudos;S.infl=st.influenciadores;S.produtos=st.produtos;S.criterios=st.criterios;S.config=st.config;}
+function cloudPayload(st){var n=normState(st);return {app:APP_ID,formato:1,conteudos:n.conteudos,influenciadores:n.influenciadores,produtos:n.produtos,criterios:n.criterios,config:n.config};}
+function listDefault(col){return col==='produtos'?DEFAULT_PROD:DEFAULT_CRIT;}
+function effList(st,col){return Array.isArray(st[col])?st[col]:clone(listDefault(col));}
+function colArr(st,col){if(LISTCOLS.indexOf(col)>=0){if(!Array.isArray(st[col]))st[col]=clone(listDefault(col));return st[col];}return st[col];}
+function itemLabel(col,doc){if(!doc)return '';return col==='conteudos'?(doc.nome||doc.id):col==='influenciadores'?(doc.arroba||doc.id):col==='produtos'?doc.nome:(doc.texto||doc.id);}
+var COL_L={conteudos:'o conteúdo',influenciadores:'o influenciador',produtos:'o produto',criterios:'o critério'};
+
+/* operação: {t:'doc',col,id,base,next} (next null = excluir) | {t:'listnull',col,base} (voltar lista ao padrão) */
+function applyOp(st,op,strict){
+  if(op.t==='listnull'){if(strict&&!same(effList(st,op.col),op.base)&&!(st[op.col]==null))return {conflict:{op:op,col:op.col,id:null,theirs:clone(st[op.col]),label:'lista de '+op.col}};st[op.col]=null;return {ok:true};}
+  var arr=colArr(st,op.col),i=arr.findIndex(function(x){return x&&x.id===op.id;}),cur=i>=0?arr[i]:null;
+  if(strict){if(same(cur,op.next))return {ok:true};if(!same(cur,op.base))return {conflict:{op:op,col:op.col,id:op.id,theirs:clone(cur),label:itemLabel(op.col,op.next||op.base||cur)}};}
+  if(op.next==null){if(i>=0)arr.splice(i,1);}else if(i>=0)arr[i]=clone(op.next);else arr.push(clone(op.next));
+  return {ok:true};
+}
+
+/* ---------- acesso ao banco ---------- */
+function isAuthErr(e){var s=e&&(e.status||e.code);var m=String(e&&e.message||'');return s===401||s==='401'||s==='PGRST301'||s==='PGRST303'||/jwt|token is expired|invalid claim/i.test(m);}
+async function fetchRow(onlyVersion){
+  var r=await sb.from(SB_TABLE).select(onlyVersion?'updated_at':'data,updated_at').eq('id',SB_ROW).maybeSingle();
+  if(r.error)throw r.error;
+  if(!r.data)return {exists:false,version:null,data:null};
+  return {exists:true,version:r.data.updated_at,data:onlyVersion?null:r.data.data};
+}
+/* grava o estado completo só se a versão no banco ainda for a que temos. Nunca grava às cegas. */
+async function writeRow(payload,version,exists){
+  var stamp=new Date().toISOString();
+  if(exists===false){
+    var ins=await sb.from(SB_TABLE).insert({id:SB_ROW,data:payload,updated_at:stamp}).select('updated_at');
+    if(ins.error){if(String(ins.error.code)==='23505')return {conflict:true};throw ins.error;}
+    return {ok:true,version:ins.data&&ins.data[0]?ins.data[0].updated_at:stamp};
+  }
+  var q=sb.from(SB_TABLE).update({data:payload,updated_at:stamp}).eq('id',SB_ROW);
+  q=version==null?q.is('updated_at',null):q.eq('updated_at',version);
+  var r=await q.select('updated_at');
+  if(r.error)throw r.error;
+  if(r.data&&r.data.length)return {ok:true,version:r.data[0].updated_at};
+  return {conflict:true};
+}
+
+/* ---------- núcleo de sincronização ---------- */
 var Store={
-  backend:null, locked:false, salvoEm:null,
-  dados:function(){return {conteudos:S.conteudos,influenciadores:S.infl,produtos:S.produtos,criterios:S.criterios,config:S.config||{}};},
-  snapshot:function(){return {app:APP_ID,formato:1,salvoEm:new Date().toISOString(),dados:JSON.parse(JSON.stringify(this.dados()))};},
-  apply:function(d){d=d||{};S.conteudos=asArr(d.conteudos);S.infl=asArr(d.influenciadores);S.produtos=Array.isArray(d.produtos)?d.produtos:null;S.criterios=Array.isArray(d.criterios)?d.criterios:null;S.config=(d.config&&typeof d.config==='object')?d.config:{};},
-  lsDisponivel:function(){try{var k='__altum_teste__';localStorage.setItem(k,'1');localStorage.removeItem(k);return true;}catch(e){return false;}},
-  lerLocal:function(){var raw=localStorage.getItem(STORE_KEY);if(raw==null)return null;return JSON.parse(raw);},
-  gravarLocal:function(){
-    if(this.locked)throw {code:'bloqueado',message:'Os dados salvos não puderam ser lidos; nada foi gravado para não sobrescrevê-los.'};
-    var snap=this.snapshot(),txt=JSON.stringify(snap);
-    try{localStorage.setItem(STORE_KEY,txt);}catch(e){throw {code:'armazenamento_cheio',message:'O navegador recusou a gravação (espaço cheio ou bloqueado).'};}
-    if(localStorage.getItem(STORE_KEY)!==txt)throw {code:'verificacao',message:'A gravação não pôde ser confirmada.'};
-    this.salvoEm=snap.salvoEm;
+  remote:null, version:null, exists:true, pending:[], busy:false, timer:null, retryMs:0,
+  status:'carregando', salvoEm:null, conflicts:[], notices:[], user:null,
+  backend:'nuvem',
+  snapshot:function(){return {app:APP_ID,formato:1,salvoEm:new Date().toISOString(),dados:clone(stateFromS())};},
+  setStatus:function(s){this.status=s;renderMode();},
+  note:function(msg,kind){this.notices=this.notices.filter(function(n){return n.msg!==msg;});this.notices.push({id:uid('n'),msg:msg,kind:kind||'info'});},
+  saveCache:function(){lsSet(CACHE_KEY,{app:APP_ID,usuario:this.user&&this.user.id||null,salvoEm:this.salvoEm,versao:this.version,existe:this.exists,remoto:this.remote,pendentes:this.pending});},
+  /* aplica operações na tela agora e agenda o envio */
+  commit:function(ops){
+    if(S.phase!=='app')throw {message:'O sistema ainda não terminou de carregar os dados.'};
+    if(S.readonly)throw {message:'Os dados desta tela não puderam ser carregados da nuvem; nada pode ser alterado até a conexão voltar.'};
+    var st=clone(stateFromS()),ok=[],self=this;
+    ops.forEach(function(op){var r=applyOp(st,op,true);if(r.conflict)self.addConflict(r.conflict);else ok.push(op);});
+    applyToS(st);this.pending=this.pending.concat(ok);this.saveCache();render();
+    if(ok.length)this.schedule(500);
   },
-  /* aplica uma mudança em memória e grava; se a gravação falhar, desfaz a mudança */
-  mudar:function(fn){
-    if(this.backend!=='local')return;
-    var antes=JSON.stringify(this.dados());
-    fn();
-    try{this.gravarLocal();}catch(e){this.apply(JSON.parse(antes));render();throw e;}
-    render();
+  schedule:function(ms){var self=this;clearTimeout(this.timer);this.timer=setTimeout(function(){self.flush();},ms==null?500:ms);if(this.status!=='offline')this.setStatus('pendente');},
+  flush:async function(){
+    if(this.busy||!this.pending.length||!sb)return;
+    this.busy=true;var sending=this.pending.slice();
+    /* checagem de segurança: o que vai para a nuvem tem de ser exatamente "último estado da nuvem + minhas operações" */
+    var rebuilt=normState(clone(this.remote));sending.forEach(function(op){applyOp(rebuilt,op,false);});
+    var data=normState(clone(stateFromS()));
+    if(!same(rebuilt,data)){this.busy=false;await this.reloadRemote('Os dados da tela ficaram diferentes do esperado; a base da nuvem foi recarregada antes de qualquer gravação.');return;}
+    this.setStatus('salvando');
+    try{
+      var r=await writeRow(cloudPayload(data),this.version,this.exists);
+      if(r.ok){this.version=r.version;this.exists=true;this.remote=data;this.pending=this.pending.slice(sending.length);this.salvoEm=new Date().toISOString();this.retryMs=0;this.saveCache();this.setStatus(this.pending.length?'pendente':'ok');}
+      else{this.busy=false;await this.resolveConflict();return;}
+    }catch(e){this.busy=false;this.onNetError(e);return;}
+    this.busy=false;if(this.pending.length)this.schedule(300);else render();
   },
+  onNetError:function(e){
+    if(isAuthErr(e)){sessionLost();return;}
+    this.saveCache();this.setStatus('offline');render();
+    var self=this;this.retryMs=Math.min(60000,this.retryMs?this.retryMs*2:5000);
+    clearTimeout(this.timer);this.timer=setTimeout(function(){if(self.pending.length)self.flush();else self.checkRemote();},this.retryMs);
+  },
+  /* alguém gravou antes: baixa o mais novo e reaplica minhas operações item a item */
+  resolveConflict:async function(){
+    var row;try{row=await fetchRow(false);}catch(e){this.onNetError(e);return;}
+    var st=normState(clone(row.data)),keep=[],self=this,lost=0;
+    this.pending.forEach(function(op){var r=applyOp(st,op,true);if(r.conflict){self.addConflict(r.conflict);lost++;}else keep.push(op);});
+    this.remote=normState(clone(row.data));this.version=row.version;this.exists=row.exists;this.pending=keep;applyToS(st);
+    this.note('Outra pessoa alterou a base enquanto você trabalhava. As alterações dela foram carregadas'+(keep.length?' e as suas foram aplicadas por cima':'')+(lost?'; '+lost+' item(ns) editado(s) pelas duas pessoas ficaram com a versão da nuvem (veja abaixo)':'')+'.','aviso');
+    this.saveCache();render();
+    if(keep.length)this.schedule(100);else this.setStatus('ok');
+  },
+  addConflict:function(c){this.conflicts=this.conflicts.filter(function(x){return !(x.col===c.col&&x.id===c.id);});c.key=uid('k');this.conflicts.push(c);},
+  /* verificação leve (só updated_at) para trazer alterações de outras pessoas */
+  checkRemote:async function(){
+    if(!sb||S.phase!=='app'||this.busy)return;
+    if(this.pending.length){this.flush();return;}
+    try{var v=await fetchRow(true);
+      if(this.status==='offline'||S.readonly){this.retryMs=0;}
+      if(v.version!==this.version||S.readonly){await this.reloadRemote(S.readonly?null:'A base foi atualizada por outra pessoa. Os dados mais recentes foram carregados.');}
+      else this.setStatus('ok');
+    }catch(e){this.onNetError(e);}
+  },
+  reloadRemote:async function(msg){
+    try{var row=await fetchRow(false);}catch(e){this.onNetError(e);return;}
+    this.remote=normState(clone(row.data));this.version=row.version;this.exists=row.exists;
+    var st=normState(clone(row.data)),keep=[],self=this;
+    this.pending.forEach(function(op){var r=applyOp(st,op,true);if(r.conflict)self.addConflict(r.conflict);else keep.push(op);});
+    this.pending=keep;applyToS(st);S.readonly=false;this.retryMs=0;
+    if(msg)this.note(msg,'info');this.saveCache();this.setStatus(keep.length?'pendente':'ok');render();
+    if(keep.length)this.schedule(100);
+  },
+  /* troca a base inteira (importar backup, migrar, apagar tudo): só grava se ninguém mudou a base desde o carregamento */
+  replaceAll:async function(d,acao){
+    if(S.readonly)throw {message:'Sem conexão com a nuvem. Tente de novo quando a sincronização voltar.'};
+    if(this.pending.length){await this.flush();if(this.pending.length)throw {message:'Ainda há alterações não enviadas. Aguarde a sincronização e tente de novo.'};}
+    var data=normState(clone(d));this.setStatus('salvando');
+    var r;try{r=await writeRow(cloudPayload(data),this.version,this.exists);}catch(e){this.onNetError(e);throw {message:'Não foi possível falar com a nuvem. Nada foi alterado.'};}
+    if(!r.ok){await this.reloadRemote(null);throw {message:'A base foi alterada por outra pessoa desde que você abriu o sistema. Nada foi substituído; os dados mais recentes foram carregados. Revise e confirme '+(acao||'a ação')+' de novo.'};}
+    this.version=r.version;this.exists=true;this.remote=data;applyToS(clone(data));this.salvoEm=new Date().toISOString();this.saveCache();this.setStatus('ok');render();return true;
+  },
+  clearAll:async function(){return this.replaceAll({conteudos:[],influenciadores:[],produtos:null,criterios:null,config:S.config||{}},'a exclusão');},
+  /* ---- API usada pelo restante do sistema (mesmos nomes de antes) ---- */
   saveDoc:async function(col,id,data){
-    var clean=JSON.parse(JSON.stringify(data));delete clean.id;
-    if(this.backend==='db'){await S.db.doc(col+'/'+id).set(clean);return;}
-    this.mudar(function(){var arr=col==='conteudos'?S.conteudos:S.infl;clean.id=id;var i=arr.findIndex(function(x){return x.id===id;});if(i>=0)arr[i]=clean;else arr.push(clean);});
+    var clean=clone(data);clean.id=id;
+    var arr=col==='conteudos'?S.conteudos:S.infl,cur=arr.find(function(x){return x.id===id;})||null;
+    var base=(UI.editBase&&UI.editBase.col===col&&UI.editBase.id===id)?UI.editBase.doc:clone(cur);
+    this.commit([{t:'doc',col:col,id:id,base:base,next:clean}]);
   },
-  delDoc:async function(col,id){
-    if(this.backend==='db'){await S.db.doc(col+'/'+id).delete();return;}
-    this.mudar(function(){var arr=col==='conteudos'?S.conteudos:S.infl;var i=arr.findIndex(function(x){return x.id===id;});if(i>=0)arr.splice(i,1);});
-  },
-  /* listas de configuração: 'produtos' e 'criterios' (null = voltar ao padrão) */
+  delDoc:async function(col,id){var arr=col==='conteudos'?S.conteudos:S.infl,cur=arr.find(function(x){return x.id===id;});if(!cur)return;this.commit([{t:'doc',col:col,id:id,base:clone(cur),next:null}]);},
   setList:async function(nome,list){
-    if(this.backend==='db'){var ref=S.db.doc('config/'+nome);if(list==null){S[nome]=null;await ref.delete();render();}else{S[nome]=list;var o={};o[nome==='produtos'?'lista':'regras']=list;await ref.set(o);}return;}
-    this.mudar(function(){S[nome]=list;});
+    var baseList=effList(stateFromS(),nome);
+    if(list==null){this.commit([{t:'listnull',col:nome,base:clone(baseList)}]);return;}
+    var ops=[];
+    list.forEach(function(it){var b=baseList.find(function(x){return x.id===it.id;})||null;if(!same(b,it))ops.push({t:'doc',col:nome,id:it.id,base:clone(b),next:clone(it)});});
+    baseList.forEach(function(b){if(!list.some(function(x){return x.id===b.id;}))ops.push({t:'doc',col:nome,id:b.id,base:clone(b),next:null});});
+    if(ops.length)this.commit(ops);
   },
-  /* preferências do sistema (aba aberta, filtros). Falha aqui nunca bloqueia o uso. */
-  saveConfig:function(){
-    S.config=Object.assign({},S.config||{},{aba:UI.tab,filtros:UI.f});
-    if(this.backend!=='local'||this.locked)return;
-    try{this.gravarLocal();}catch(e){}
-  },
-  replaceAll:async function(d){
-    if(this.backend==='db'){
-      var i;for(i=0;i<S.conteudos.length;i++)await S.db.doc('conteudos/'+S.conteudos[i].id).delete();
-      for(i=0;i<S.infl.length;i++)await S.db.doc('influenciadores/'+S.infl[i].id).delete();
-      var cs=asArr(d.conteudos),is=asArr(d.influenciadores);
-      for(i=0;i<cs.length;i++){var c=Object.assign({},cs[i]);var cid=c.id||uid('c_');delete c.id;await S.db.doc('conteudos/'+cid).set(c);}
-      for(i=0;i<is.length;i++){var n=Object.assign({},is[i]);var nid=n.id||uid('i_');delete n.id;await S.db.doc('influenciadores/'+nid).set(n);}
-      if(Array.isArray(d.produtos))await S.db.doc('config/produtos').set({lista:d.produtos});else await S.db.doc('config/produtos').delete();
-      if(Array.isArray(d.criterios))await S.db.doc('config/criterios').set({regras:d.criterios});else await S.db.doc('config/criterios').delete();
-      return;}
-    var self=this;this.locked=false;S.errMsg='';
-    this.mudar(function(){self.apply(d);});
-  },
-  clearAll:async function(){await this.replaceAll({conteudos:[],influenciadores:[],produtos:null,criterios:null,config:{}});}
+  saveConfig:function(){lsSet(PREFS_KEY,{aba:UI.tab,filtros:UI.f});}
 };
 async function save(col,id,data){await Store.saveDoc(col,id,data);}
 async function del(col,id){await Store.delDoc(col,id);}
 async function saveCrit(list){await Store.setList('criterios',list);}
-async function loadExamples(){var d=genDemo();
-  for(var i=0;i<d.conteudos.length;i++)await save('conteudos',d.conteudos[i].id,d.conteudos[i]);
-  for(var j=0;j<d.influenciadores.length;j++)await save('influenciadores',d.influenciadores[j].id,d.influenciadores[j]);}
-async function clearExamples(){var c=S.conteudos.filter(function(x){return x.exemplo;}),n=S.infl.filter(function(x){return x.exemplo;});
-  for(var i=0;i<c.length;i++)await del('conteudos',c[i].id);for(var j=0;j<n.length;j++)await del('influenciadores',n[j].id);}
-function setMode(m){S.mode=m;var el=document.getElementById('mode');
-  var txt=m==='db'?'Dados salvos no banco':m==='local'?'Dados salvos neste navegador':m==='sem-armazenamento'?'Este navegador bloqueou o armazenamento':'Carregando…';
-  el.innerHTML='<i class="dot'+(m==='db'||m==='local'?' on':m==='sem-armazenamento'?' demo':'')+'"></i><span>'+txt+'</span><button class="btn sm" data-act="settings" style="margin-left:6px">Configurações</button>';}
-function startLocal(){
-  Store.backend='local';
-  if(!Store.lsDisponivel()){Store.locked=true;setMode('sem-armazenamento');S.errMsg='Este navegador está bloqueando o armazenamento local (janela anônima ou dados do site bloqueados). Nada será salvo até isso ser liberado.';render();return;}
-  try{var o=Store.lerLocal();
-    if(o){Store.apply(o.dados||o);Store.salvoEm=o.salvoEm||null;
-      var cfg=S.config||{};if(cfg.aba&&TABS.some(function(t){return t[0]===cfg.aba;}))UI.tab=cfg.aba;if(cfg.filtros)UI.f=Object.assign({de:'',ate:'',produto:''},cfg.filtros);}
-  }catch(e){Store.locked=true;S.errMsg='Os dados salvos neste navegador não puderam ser lidos. Nada foi apagado nem sobrescrito. Importe um backup em Configurações, ou use "Apagar todos os dados" para recomeçar.';}
-  setMode('local');render();
+async function loadExamples(){var d=genDemo(),ops=[];
+  d.conteudos.forEach(function(c){if(!S.conteudos.some(function(x){return x.id===c.id;}))ops.push({t:'doc',col:'conteudos',id:c.id,base:null,next:c});});
+  d.influenciadores.forEach(function(c){if(!S.infl.some(function(x){return x.id===c.id;}))ops.push({t:'doc',col:'influenciadores',id:c.id,base:null,next:c});});
+  if(ops.length)Store.commit(ops);}
+async function clearExamples(){var ops=[];
+  S.conteudos.forEach(function(c){if(c.exemplo)ops.push({t:'doc',col:'conteudos',id:c.id,base:clone(c),next:null});});
+  S.infl.forEach(function(c){if(c.exemplo)ops.push({t:'doc',col:'influenciadores',id:c.id,base:clone(c),next:null});});
+  if(ops.length)Store.commit(ops);}
+function resolveConflictMine(key){var c=Store.conflicts.find(function(x){return x.key===key;});if(!c)return;
+  Store.conflicts=Store.conflicts.filter(function(x){return x.key!==key;});
+  if(c.op.t==='listnull'){Store.commit([{t:'listnull',col:c.col,base:clone(effList(stateFromS(),c.col))}]);return;}
+  var arr=colArr(normState(clone(stateFromS())),c.col),cur=arr.find(function(x){return x.id===c.id;})||null;
+  Store.commit([{t:'doc',col:c.col,id:c.id,base:clone(cur),next:clone(c.op.next)}]);}
+
+/* ---------- indicador no topo ---------- */
+var STATUS_L={carregando:['','Carregando dados da nuvem…'],ok:['on','Dados sincronizados na nuvem'],salvando:['','Salvando na nuvem…'],pendente:['demo','Alterações aguardando envio'],offline:['demo','Sem conexão com a nuvem · dados preservados']};
+function renderMode(){var el=document.getElementById('mode');if(!el)return;
+  if(S.phase!=='app'){el.innerHTML='';return;}
+  var s=S.readonly?['demo','Modo offline · somente leitura']:(STATUS_L[Store.status]||STATUS_L.ok);
+  el.innerHTML='<i class="dot'+(s[0]?' '+s[0]:'')+'"></i><span>'+s[1]+'</span>'+(Store.user&&Store.user.email?'<span class="small muted" style="margin-left:6px">· '+esc(Store.user.email)+'</span>':'')+
+    '<button class="btn sm" data-act="settings" style="margin-left:6px">Configurações</button><button class="btn sm" data-act="logout">Sair</button>';}
+
+/* ---------- autenticação e carregamento ---------- */
+function gate(html){document.getElementById('tabs').innerHTML='';document.getElementById('tabs').hidden=true;renderMode();document.getElementById('main').innerHTML=html;}
+function showLogin(msg){S.phase='login';closeModal();S.conteudos=[];S.infl=[];S.produtos=null;S.criterios=null;S.config={};
+  gate('<div class="gate"><div class="panel gatecard"><div class="eyebrow">Acesso restrito</div><h2>Entrar</h2><p class="small muted" style="margin:0">Use o e-mail e a senha criados pelo administrador.</p>'+
+   '<form id="login-form" class="gateform" novalidate><label>E-mail<input id="login-email" type="email" autocomplete="username" required></label><label>Senha<input id="login-senha" type="password" autocomplete="current-password" required></label>'+
+   '<p class="err" id="login-err" role="alert">'+esc(msg||'')+'</p><button class="btn pri" type="submit" id="login-btn">Entrar</button></form></div></div>');
+  var e=document.getElementById('login-email');if(e)e.focus();}
+function showGateMsg(title,msg,btn){gate('<div class="gate"><div class="panel gatecard"><h2>'+esc(title)+'</h2><p class="small" style="margin:0">'+esc(msg)+'</p>'+(btn?'<div class="row" style="margin-top:12px">'+btn+'</div>':'')+'</div></div>');}
+async function doLogin(){
+  var em=val('login-email'),pw=document.getElementById('login-senha').value,er=document.getElementById('login-err'),b=document.getElementById('login-btn');
+  if(!em||!pw){er.textContent='Informe e-mail e senha.';return;}
+  b.disabled=true;b.textContent='Entrando…';er.textContent='';
+  var r;try{r=await sb.auth.signInWithPassword({email:em,password:pw});}catch(e){r={error:e};}
+  if(r.error||!r.data||!r.data.session){b.disabled=false;b.textContent='Entrar';
+    var m=String(r.error&&r.error.message||'');er.textContent=/invalid login|invalid_credentials|invalid email or password/i.test(m)||(r.error&&r.error.status===400)?'E-mail ou senha incorretos.':/fetch|network|failed/i.test(m)?'Não foi possível conectar. Verifique a internet e tente de novo.':'Não foi possível entrar: '+m;return;}
+  await enterApp(r.data.session);
 }
-(async function init(){
-  var db=null;
-  if(window.claude&&window.claude.use){try{db=await window.claude.use('db');}catch(e){db=null;}}
-  if(!db){startLocal();return;}
-  S.db=db;Store.backend='db';setMode('db');
-  var onErr=function(e){S.errMsg='Não foi possível ler o banco ('+(e&&e.code||'erro')+'). Recarregue a página.';render();};
-  db.collection('conteudos').onSnapshot(function(s){S.conteudos=s.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o;});render();},onErr);
-  db.collection('influenciadores').onSnapshot(function(s){S.infl=s.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o;});render();},onErr);
-  db.doc('config/produtos').onSnapshot(function(s){S.produtos=s.exists?(s.data().lista||[]):null;render();},onErr);
-  db.doc('config/criterios').onSnapshot(function(s){S.criterios=s.exists?(s.data().regras||null):null;render();},onErr);
-})();
+async function enterApp(session){
+  Store.user=session.user||null;S.phase='loading';S.readonly=false;Store.conflicts=[];Store.notices=[];Store.pending=[];
+  showGateMsg('Carregando dados da nuvem…','Buscando a base compartilhada do ALTUM Content Intelligence.');
+  var cache=lsGet(CACHE_KEY);var row=null,err=null;
+  try{row=await fetchRow(false);}catch(e){err=e;}
+  if(err&&isAuthErr(err)){sessionLost();return;}
+  var prefs=lsGet(PREFS_KEY)||{};if(prefs.aba&&TABS.some(function(t){return t[0]===prefs.aba;}))UI.tab=prefs.aba;if(prefs.filtros)UI.f=Object.assign({de:'',ate:'',produto:''},prefs.filtros);
+  var cachePend=(cache&&Array.isArray(cache.pendentes)&&(!cache.usuario||!Store.user||cache.usuario===Store.user.id))?cache.pendentes:[];
+  if(err){
+    if(cache&&cache.remoto){ /* modo offline com o último estado conhecido */
+      Store.remote=normState(cache.remoto);Store.version=cache.versao;Store.exists=cache.existe!==false;Store.pending=cachePend;Store.salvoEm=cache.salvoEm||null;
+      var st=normState(clone(Store.remote));Store.pending.forEach(function(op){applyOp(st,op,false);});applyToS(st);
+      S.readonly=true;S.phase='app';Store.status='offline';
+      Store.note('Não foi possível sincronizar com a nuvem. Os dados carregados anteriormente foram preservados. Você está vendo a última cópia salva neste navegador'+(cache.salvoEm?' ('+new Date(cache.salvoEm).toLocaleString('pt-BR')+')':'')+', em modo somente leitura.','erro');
+      document.getElementById('tabs').hidden=false;render();Store.onNetError(err);return;}
+    S.phase='error';showGateMsg('Não foi possível sincronizar com a nuvem','Os dados não foram carregados e nada foi alterado. Verifique a internet e tente de novo.','<button class="btn pri" data-act="retryLoad">Tentar de novo</button><button class="btn" data-act="logout">Sair</button>');return;}
+  Store.remote=normState(clone(row.data));Store.version=row.version;Store.exists=row.exists;Store.retryMs=0;
+  var st2=normState(clone(row.data));
+  cachePend.forEach(function(op){var r=applyOp(st2,op,true);if(r.conflict)Store.addConflict(r.conflict);else Store.pending.push(op);});
+  if(cachePend.length)Store.note('Havia alterações feitas neste navegador que ainda não tinham sido enviadas. Elas foram reaplicadas sobre a base atual da nuvem'+(Store.conflicts.length?'; itens alterados ao mesmo tempo por outra pessoa estão listados abaixo':'')+'.','aviso');
+  applyToS(st2);S.phase='app';Store.saveCache();
+  /* migração da versão local */
+  var legacy=lsGet(LEGACY_KEY),ld=legacy?normState(legacy.dados||legacy):null;
+  S.migrar=null;S.legacyDiff=false;
+  if(ld&&hasReal(ld)){
+    if(!hasReal(Store.remote)&&!Store.pending.length)S.migrar=ld;
+    else if(!same(normState(ld),Store.remote)&&!S.legacyAvisado)S.legacyDiff=true;
+  }
+  document.getElementById('tabs').hidden=false;Store.setStatus(Store.pending.length?'pendente':'ok');render();
+  if(Store.pending.length)Store.schedule(200);
+}
+function sessionLost(){var pend=Store.pending.length;Store.saveCache();Store.user=null;S.phase='login';
+  showLogin('Sua sessão terminou. Entre novamente.'+(pend?' As alterações ainda não enviadas foram guardadas neste navegador e serão enviadas depois do login.':''));}
+async function doLogout(force){
+  if(Store.pending.length&&!force){await Store.flush();if(Store.pending.length){UI.confirmLogout=true;render();return;}}
+  UI.confirmLogout=false;clearTimeout(Store.timer);
+  if(!Store.pending.length)lsDel(CACHE_KEY);else Store.saveCache();
+  try{await sb.auth.signOut();}catch(e){}
+  Store.user=null;Store.remote=null;Store.version=null;Store.pending=[];Store.conflicts=[];Store.notices=[];
+  showLogin('');
+}
+async function boot(){
+  if(!window.supabase||!window.supabase.createClient){S.phase='error';showGateMsg('Não foi possível iniciar','A biblioteca de conexão com a nuvem não carregou. Verifique a internet e recarregue a página.','<button class="btn pri" data-act="reload">Recarregar</button>');return;}
+  sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+  var sess=null;try{var r=await sb.auth.getSession();sess=r&&r.data&&r.data.session;}catch(e){sess=null;}
+  sb.auth.onAuthStateChange(function(ev){if(ev==='SIGNED_OUT'&&S.phase==='app'){sessionLost();}});
+  if(sess)await enterApp(sess);else showLogin('');
+}
+/* alterações de outras pessoas: verifica ao voltar para a aba e a cada 45 s */
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')Store.checkRemote();});
+window.addEventListener('online',function(){Store.checkRemote();});
+setInterval(function(){if(document.visibilityState!=='hidden')Store.checkRemote();},45000);
+window.addEventListener('beforeunload',function(e){if(Store.pending.length){Store.saveCache();e.preventDefault();e.returnValue='';}});
 
 /* ===================== Configurações: backup ===================== */
 function backupText(){return JSON.stringify(Store.snapshot(),null,2);}
@@ -436,30 +611,37 @@ function parseBackup(txt){var o;try{o=JSON.parse(txt);}catch(e){throw new Error(
   var d=o&&o.dados?o.dados:o;
   if(!d||typeof d!=='object'||(!Array.isArray(d.conteudos)&&!Array.isArray(d.influenciadores)))throw new Error('Este arquivo não parece ser um backup do ALTUM Content Intelligence.');
   return {conteudos:asArr(d.conteudos),influenciadores:asArr(d.influenciadores),produtos:Array.isArray(d.produtos)?d.produtos:null,criterios:Array.isArray(d.criterios)?d.criterios:null,config:d.config||{},exportadoEm:o.salvoEm||null};}
-async function exportBackup(){
-  var txt=backupText(),nome='altum-backup-'+new Date().toISOString().slice(0,10)+'.json';
-  if(Store.backend==='db'&&window.claude&&window.claude.use){var dl=null;try{dl=await window.claude.use('downloads');}catch(e){}
-    if(dl){await dl.save({filename:nome,data:new Blob([txt],{type:'application/json'})});return 'Backup gerado.';}}
-  var url=URL.createObjectURL(new Blob([txt],{type:'application/json'}));var a=document.createElement('a');a.href=url;a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},2000);
-  return 'Backup "'+nome+'" baixado.';}
+function downloadJson(txt,nome){var url=URL.createObjectURL(new Blob([txt],{type:'application/json'}));var a=document.createElement('a');a.href=url;a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},2000);}
+async function exportBackup(){var nome='altum-backup-'+new Date().toISOString().slice(0,10)+'.json';downloadJson(backupText(),nome);return 'Backup "'+nome+'" baixado.';}
+function legacyData(){var l=lsGet(LEGACY_KEY);if(!l)return null;var d=normState(l.dados||l);return hasReal(d)?d:null;}
 function openSettings(){
   var n=S.conteudos.length,m=S.infl.length,ex=S.conteudos.some(function(c){return c.exemplo;})||S.infl.some(function(c){return c.exemplo;});
-  var where=Store.backend==='db'?'Os dados ficam no banco deste artifact no Claude.':'Os dados ficam salvos neste navegador, neste computador. Para levar para outro navegador ou computador, use o backup.';
-  var pend=UI.imp;
+  var pend=UI.imp,leg=legacyData(),cloudEmpty=!hasReal(stateFromS());
   openModal('<div class="sechead"><h2>Configurações</h2><button class="btn" data-act="close">Fechar</button></div>'+
-   '<section class="panel"><h3>Armazenamento</h3><p class="small" style="margin:0">'+where+'</p><p class="small muted" style="margin:6px 0 0">'+n+' conteúdo(s) · '+m+' influenciador(es) · '+prodList().length+' produto(s)'+(Store.salvoEm?' · última gravação: '+new Date(Store.salvoEm).toLocaleString('pt-BR'):'')+'</p></section>'+
+   '<section class="panel"><h3>Armazenamento</h3><p class="small" style="margin:0">Os dados ficam na base compartilhada na nuvem. Todos os usuários autorizados veem a mesma base. Este navegador guarda só uma cópia de segurança.</p><p class="small muted" style="margin:6px 0 0">'+n+' conteúdo(s) · '+m+' influenciador(es) · '+prodList().length+' produto(s)'+(Store.salvoEm?' · última gravação deste navegador: '+new Date(Store.salvoEm).toLocaleString('pt-BR'):'')+(Store.user&&Store.user.email?' · conectado como '+esc(Store.user.email):'')+'</p></section>'+
    '<section class="panel"><h3>Exportar backup</h3><p class="small muted" style="margin:0 0 10px">Gera um arquivo .json com conteúdos, Insights, influenciadores, avaliações, dados verificados, produtos, critérios e configurações.</p><div class="row"><button class="btn pri" data-act="exportB">Exportar backup</button><span class="small" id="exp-msg"></span></div></section>'+
-   '<section class="panel"><h3>Importar backup</h3><p class="small muted" style="margin:0 0 10px">Restaura um arquivo exportado antes. Substitui todos os dados atuais.</p>'+
-    (pend?'<p class="small" style="margin:0 0 10px">Arquivo pronto: <b>'+pend.conteudos.length+'</b> conteúdo(s), <b>'+pend.influenciadores.length+'</b> influenciador(es)'+(pend.produtos?', <b>'+pend.produtos.length+'</b> produto(s)':'')+(pend.exportadoEm?', exportado em '+new Date(pend.exportadoEm).toLocaleString('pt-BR'):'')+'.</p><div class="row"><button class="btn pri" data-act="impB">Confirmar importação</button><button class="btn" data-act="impCancel">Cancelar</button></div>':
+   '<section class="panel"><h3>Importar backup</h3><p class="small muted" style="margin:0 0 10px">Restaura um arquivo exportado antes. Substitui toda a base compartilhada, para todos os usuários.</p>'+
+    (pend?'<p class="small" style="margin:0 0 10px">Arquivo pronto: <b>'+pend.conteudos.length+'</b> conteúdo(s), <b>'+pend.influenciadores.length+'</b> influenciador(es)'+(pend.produtos?', <b>'+pend.produtos.length+'</b> produto(s)':'')+(pend.exportadoEm?', exportado em '+new Date(pend.exportadoEm).toLocaleString('pt-BR'):'')+'.</p><p class="small" style="margin:0 0 10px"><b>Isso vai substituir a base compartilhada atual ('+n+' conteúdo(s), '+m+' influenciador(es)) para todos os usuários.</b></p><div class="row"><button class="btn pri" data-act="impB">Confirmar e substituir a base</button><button class="btn" data-act="impCancel">Cancelar</button></div>':
      '<label>Arquivo .json<input type="file" id="imp-file" accept=".json,application/json"></label>')+'<p class="err" id="imp-err">'+esc(UI.impErr||'')+'</p></section>'+
-   (!ex&&!n&&!m?'<section class="panel"><h3>Dados de demonstração</h3><p class="small muted" style="margin:0 0 10px">Carrega conteúdos e perfis fictícios, marcados como exemplo, para conhecer as telas.</p><button class="btn" data-act="loadEx">Carregar exemplos fictícios</button></section>':'')+
-   '<section class="panel" style="border-color:var(--bad)"><h3>Apagar todos os dados</h3><p class="small muted" style="margin:0 0 10px">Remove conteúdos, influenciadores, produtos, critérios e configurações. Não dá para desfazer; exporte um backup antes.</p>'+
-    (UI.confirmAll?'<div class="row"><button class="btn danger" data-act="clearAll2">Sim, apagar tudo</button><button class="btn" data-act="clearAllCancel">Cancelar</button></div>':'<button class="btn danger" data-act="clearAll">Apagar todos os dados</button>')+'</section>');
+   (leg?'<section class="panel"><h3>Dados da versão local neste navegador</h3><p class="small muted" style="margin:0 0 10px">'+leg.conteudos.length+' conteúdo(s) e '+leg.influenciadores.length+' influenciador(es) da versão anterior, que salvava só neste navegador. Eles continuam guardados aqui e não foram alterados.'+(cloudEmpty?'':' A base da nuvem já tem dados; para usar estes, baixe como backup e importe (com confirmação).')+'</p><div class="row"><button class="btn" data-act="legacyDl">Baixar como backup</button>'+(cloudEmpty?'<button class="btn pri" data-act="migrar">Migrar para a nuvem</button>':'')+'</div></section>':'')+
+   (!ex&&!n&&!m?'<section class="panel"><h3>Dados de demonstração</h3><p class="small muted" style="margin:0 0 10px">Carrega conteúdos e perfis fictícios, marcados como exemplo, para conhecer as telas. Eles vão para a base compartilhada.</p><button class="btn" data-act="loadEx">Carregar exemplos fictícios</button></section>':'')+
+   '<section class="panel" style="border-color:var(--bad)"><h3>Apagar todos os dados</h3><p class="small muted" style="margin:0 0 10px">Remove conteúdos, influenciadores, produtos e critérios da base compartilhada, para todos os usuários. Não dá para desfazer; exporte um backup antes.</p>'+
+    (UI.confirmAll?'<div class="row"><button class="btn danger" data-act="clearAll2">Sim, apagar a base compartilhada</button><button class="btn" data-act="clearAllCancel">Cancelar</button></div>':'<button class="btn danger" data-act="clearAll">Apagar todos os dados</button>')+'</section>');
 }
+/* faixas de aviso exibidas no topo do sistema */
+function cloudBanners(){var h='';
+  if(S.migrar){var d=S.migrar;h+='<div class="panel migrate"><h3>Encontramos dados salvos neste navegador. Deseja migrá-los para a base compartilhada?</h3><p class="small muted" style="margin:0 0 10px">'+d.conteudos.length+' conteúdo(s), '+d.influenciadores.length+' influenciador(es)'+(d.produtos?', '+d.produtos.length+' produto(s)':'')+(d.criterios?', '+d.criterios.length+' critério(s)':'')+'. A base da nuvem está vazia. Os dados deste navegador não serão apagados.</p><div class="row"><button class="btn pri" data-act="migrar">Migrar para a nuvem</button><button class="btn" data-act="migrarNao">Não agora</button></div></div>';}
+  if(S.legacyDiff)h+='<div class="banner"><span>Este navegador ainda tem dados da versão local, diferentes da base da nuvem. A nuvem foi mantida e nada foi sobrescrito. Se precisar deles, baixe em Configurações.</span><button class="btn sm" data-act="legacyOk">Entendi</button></div>';
+  if(UI.confirmLogout)h+='<div class="banner"><span>Há alterações ainda não enviadas para a nuvem. Elas ficam guardadas neste navegador e serão enviadas no próximo login. Sair mesmo assim?</span><span class="row"><button class="btn sm danger" data-act="logoutForce">Sair mesmo assim</button><button class="btn sm" data-act="logoutCancel">Continuar conectado</button></span></div>';
+  if(Store.status==='offline'&&!S.readonly&&!Store.notices.some(function(n){return n.kind==='erro';}))h+='<div class="banner"><span>Não foi possível sincronizar com a nuvem. Os dados carregados anteriormente foram preservados'+(Store.pending.length?' e '+Store.pending.length+' alteração(ões) aguardam envio; o sistema tenta de novo automaticamente':'')+'.</span><button class="btn sm" data-act="retrySync">Tentar agora</button></div>';
+  Store.notices.forEach(function(n){h+='<div class="banner"><span>'+esc(n.msg)+'</span><span class="row">'+(n.kind==='erro'?'<button class="btn sm" data-act="retrySync">Tentar agora</button>':'')+'<button class="btn sm" data-act="dismissNote" data-id="'+esc(n.id)+'">Fechar</button></span></div>';});
+  Store.conflicts.forEach(function(c){h+='<div class="banner"><span><b>Alteração simultânea:</b> '+COL_L[c.col]+' “'+esc(c.label||'')+'” foi '+(c.theirs==null?'excluído':'alterado')+' por outra pessoa enquanto você '+(c.op.next==null?'o excluía':'o editava')+'. A versão da nuvem foi mantida e a sua não foi aplicada.</span><span class="row"><button class="btn sm" data-act="cfMine" data-id="'+esc(c.key)+'">'+(c.op.next==null?'Excluir mesmo assim':'Usar a minha versão')+'</button><button class="btn sm" data-act="cfKeep" data-id="'+esc(c.key)+'">Manter a da nuvem</button></span></div>';});
+  return h;}
+
 /* ===================== Render ===================== */
 function renderTabs(){document.getElementById('tabs').innerHTML=TABS.map(function(t){return '<button role="tab" data-tab="'+t[0]+'" aria-selected="'+(UI.tab===t[0])+'">'+t[1]+'</button>';}).join('');}
-function render(){renderTabs();var m=document.getElementById('main');var fn={dashboard:vDash,conteudos:vCont,influenciadores:vInfl,criterios:vCrit,inteligencia:vIntel}[UI.tab];
-  var top=S.errMsg?'<div class="banner">'+esc(S.errMsg)+'</div>':'';
+function render(){if(S.phase!=='app'){renderMode();return;}document.getElementById('tabs').hidden=false;renderTabs();renderMode();var m=document.getElementById('main');var fn={dashboard:vDash,conteudos:vCont,influenciadores:vInfl,criterios:vCrit,inteligencia:vIntel}[UI.tab];
+  var top=cloudBanners()+(S.errMsg?'<div class="banner"><span>'+esc(S.errMsg)+'</span><button class="btn sm" data-act="dismissErr">Fechar</button></div>':'');
   var ex=S.conteudos.some(function(c){return c.exemplo;})||S.infl.some(function(c){return c.exemplo;});
   if(ex)top+='<div class="banner"><span><b>Dados fictícios de demonstração.</b> Os conteúdos e perfis marcados como exemplo servem só para mostrar as telas.</span>'+(UI.confirm==='clearEx'?'<span class="row"><button class="btn sm danger" data-act="clearEx2">Confirmar: apagar exemplos</button><button class="btn sm" data-act="cancel">Cancelar</button></span>':'<button class="btn sm" data-act="clearEx">Apagar exemplos</button>')+'</div>';
   m.innerHTML='<div class="sec">'+top+fn()+'</div>';}
@@ -832,8 +1014,8 @@ function fld(id,label,val,type,extra){return '<label'+(extra&&extra.full?' class
 function sel(id,label,list,val,empty){return '<label>'+label+'<select id="'+id+'">'+opts(list,val,empty)+'</select></label>';}
 function dl(id,list){return '<datalist id="'+id+'">'+list.map(function(x){return '<option value="'+esc(x)+'">';}).join('')+'</datalist>';}
 function openModal(html){var m=document.getElementById('modal');m.innerHTML='<div class="dlg" role="dialog" aria-modal="true">'+html+'</div>';m.hidden=false;var f=m.querySelector('input,select');if(f)f.focus();}
-function closeModal(){var m=document.getElementById('modal');m.hidden=true;m.innerHTML='';}
-function formC(c){c=c||{formato:'reel',data:new Date().toISOString().slice(0,10),m:{}};var m=c.m||{};
+function closeModal(){var m=document.getElementById('modal');m.hidden=true;m.innerHTML='';UI.editBase=null;}
+function formC(c){c=c||{formato:'reel',data:new Date().toISOString().slice(0,10),m:{}};var m=c.m||{};var eb=c.id?{col:'conteudos',id:c.id,doc:clone(c)}:null;
   var mf=function(k,l,ph){return fld('m-'+k,l,m[k],'number',{ph:ph});};
   openModal('<div class="sechead"><h2>'+(c.id?'Editar conteúdo':'Cadastrar conteúdo publicado')+'</h2><button class="btn" data-act="close">Fechar</button></div>'+
   '<fieldset><legend>Conteúdo</legend><div class="fgrid">'+fld('c-nome','Nome *',c.nome,'text',{full:1})+fld('c-data','Data de publicação *',c.data,'date')+sel('c-formato','Formato *',FMTS.map(function(f){return [f,FMT[f]];}),c.formato)+
@@ -846,7 +1028,7 @@ function formC(c){c=c||{formato:'reel',data:new Date().toISOString().slice(0,10)
   '<span id="reelOnly2" style="display:contents">'+mf('duracao','Duração do Reel (s)')+mf('tempoMedio','Tempo médio de visualização (s)')+mf('retencao','Retenção (%)')+mf('conclusao','Taxa de conclusão (%)','se disponível')+'</span></div></fieldset>'+
   '<div class="row"><button class="btn pri" data-act="saveC" data-id="'+esc(c.id||'')+'">Salvar conteúdo</button><button class="btn" data-act="close">Cancelar</button><span class="err" id="f-err"></span></div>'+
   dl('dl-t',LISTS.temas)+dl('dl-h',LISTS.hookTipos)+dl('dl-c',LISTS.ctas)+dl('dl-e',LISTS.estilos));
-  toggleReel();}
+  toggleReel();UI.editBase=eb;}
 function toggleReel(){var f=document.getElementById('c-formato');if(!f)return;var on=f.value==='reel';['reelOnly1','reelOnly2'].forEach(function(id){var el=document.getElementById(id);if(el)el.hidden=!on;});}
 function val(id){var el=document.getElementById(id);return el?el.value.trim():'';}
 async function submitC(id){
@@ -859,13 +1041,13 @@ async function submitC(id){
   var c={nome:nome,data:data,formato:formato,produto:val('c-produto'),campanha:val('c-campanha'),tema:val('c-tema'),hookTipo:val('c-hookTipo'),hook:val('c-hook'),cta:val('c-cta'),estilo:val('c-estilo'),arquivo:val('c-arquivo'),legenda:val('c-legenda'),m:m,exemplo:old?!!old.exemplo:false,atualizadoEm:new Date().toISOString()};
   try{await save('conteudos',id||uid('c_'),c);closeModal();}catch(e){err.textContent='Não foi possível salvar ('+(e&&e.code||'erro')+'). Tente de novo.';}
 }
-function formI(i){i=i||{aval:{}};var a=i.aval||{},v=i.verificado||{};
+function formI(i){i=i||{aval:{}};var a=i.aval||{},v=i.verificado||{};var eb=i.id?{col:'influenciadores',id:i.id,doc:clone(i)}:null;
   var rate=function(k,l){return sel('a-'+k,l,[['1','1'],['2','2'],['3','3'],['4','4'],['5','5']],a[k]==null?'':String(a[k]),'Não avaliado');};
   openModal('<div class="sechead"><h2>'+(i.id?'Editar influenciador':'Cadastrar influenciador')+'</h2><button class="btn" data-act="close">Fechar</button></div>'+
   '<fieldset><legend>Dados públicos</legend><div class="fgrid">'+fld('i-arroba','@ do Instagram *',i.arroba,'text',{ph:'@perfil'})+fld('i-nome','Nome',i.nome)+fld('i-seguidores','Seguidores',i.seguidores,'number')+fld('i-nicho','Nicho',i.nicho)+fld('i-mediaLikes','Média de likes',i.mediaLikes,'number')+fld('i-mediaComentarios','Média de comentários',i.mediaComentarios,'number')+fld('i-mediaViews','Média de views públicas de Reels',i.mediaViews,'number',{ph:'se disponível'})+sel('i-formatoPrincipal','Formato com mais frequência e engajamento',[['reels','Reels'],['carrossel','Carrossel'],['estatico','Post Estático']],i.formatoPrincipal||'','Selecione')+'<label class="full">Observações<textarea id="i-observacoes">'+esc(i.observacoes||'')+'</textarea></label></div></fieldset>'+
   '<fieldset><legend>Avaliação da equipe (1 a 5)</legend><div class="fgrid">'+rate('estetica','Aderência estética à ALTUM')+rate('wellness','Wellness / lifestyle')+rate('qualidade','Qualidade visual')+rate('naturalidade','Naturalidade da publicidade')+rate('risco','Risco de baixa aderência (5 = alto)')+'</div></fieldset>'+
   '<fieldset><legend>Dados verificados — mídia kit ou Insights enviados</legend><p class="small muted" style="margin:0">Preencha só com dados que a própria pessoa enviou. Sem alcance médio, o Verified Score não é calculado.</p><div class="fgrid">'+fld('v-faixaPrincipal','Faixa etária principal',v.faixaPrincipal,'text',{ph:'25–34'})+fld('v-alcanceMedio','Alcance médio',v.alcanceMedio,'number')+fld('v-views','Views médias',v.views,'number')+fld('v-alcanceStories','Alcance médio de Stories',v.alcanceStories,'number')+'</div></fieldset>'+
-  '<div class="row"><button class="btn pri" data-act="saveI" data-id="'+esc(i.id||'')+'">Salvar influenciador</button><button class="btn" data-act="close">Cancelar</button><span class="err" id="f-err"></span></div>');}
+  '<div class="row"><button class="btn pri" data-act="saveI" data-id="'+esc(i.id||'')+'">Salvar influenciador</button><button class="btn" data-act="close">Cancelar</button><span class="err" id="f-err"></span></div>');UI.editBase=eb;}
 async function submitI(id){var err=document.getElementById('f-err');var ar=val('i-arroba');if(!ar){err.textContent='Informe o @ do Instagram.';return;}if(ar[0]!=='@')ar='@'+ar;
   var n=function(x){var r=val(x).replace(',','.');return r===''?null:Number(r);};
   var old=id?S.infl.find(function(x){return x.id===id;}):null;
@@ -884,13 +1066,33 @@ document.addEventListener('click',async function(e){
   var a=t.dataset.act,id=t.dataset.id;
   try{
   if(a==='close'){closeModal();UI.imp=null;UI.impErr='';UI.confirmAll=false;}
+  else if(a==='logout')await doLogout(false);
+  else if(a==='logoutForce')await doLogout(true);
+  else if(a==='logoutCancel'){UI.confirmLogout=false;render();}
+  else if(a==='reload')location.reload();
+  else if(a==='retryLoad'){var rs=await sb.auth.getSession();if(rs&&rs.data&&rs.data.session)await enterApp(rs.data.session);else showLogin('');}
+  else if(a==='retrySync'){Store.retryMs=0;Store.notices=Store.notices.filter(function(n){return n.kind!=='erro';});if(S.readonly)await Store.reloadRemote(null);else if(Store.pending.length)await Store.flush();else await Store.checkRemote();render();}
+  else if(a==='migrar'){var md=S.migrar||legacyData();if(!md)return;t.disabled=true;t.textContent='Migrando…';
+    try{await Store.replaceAll(md,'a migração');S.migrar=null;Store.note('Migração concluída com sucesso.','info');if(!document.getElementById('modal').hidden)closeModal();render();}
+    catch(me){S.migrar=null;S.errMsg='A migração não foi feita: '+(me&&me.message||'erro')+'.';render();}}
+  else if(a==='migrarNao'){S.migrar=null;render();}
+  else if(a==='legacyOk'){S.legacyDiff=false;S.legacyAvisado=true;render();}
+  else if(a==='legacyDl'){var ld=legacyData();if(ld)downloadJson(JSON.stringify({app:APP_ID,formato:1,salvoEm:new Date().toISOString(),origem:'versao-local',dados:ld},null,2),'altum-backup-versao-local-'+new Date().toISOString().slice(0,10)+'.json');}
+  else if(a==='dismissNote'){Store.notices=Store.notices.filter(function(n){return n.id!==id;});render();}
+  else if(a==='dismissErr'){S.errMsg='';render();}
+  else if(a==='cfMine')resolveConflictMine(id);
+  else if(a==='cfKeep'){Store.conflicts=Store.conflicts.filter(function(x){return x.key!==id;});render();}
   else if(a==='settings'){UI.imp=null;UI.impErr='';UI.confirmAll=false;openSettings();}
   else if(a==='exportB'){var msg=await exportBackup();var em=document.getElementById('exp-msg');if(em)em.textContent=msg;}
   else if(a==='impCancel'){UI.imp=null;openSettings();}
-  else if(a==='impB'){var d=UI.imp;UI.imp=null;await Store.replaceAll(d);closeModal();}
+  else if(a==='impB'){var d=UI.imp;t.disabled=true;t.textContent='Importando…';
+    try{await Store.replaceAll(d,'a importação');UI.imp=null;closeModal();Store.note('Backup importado e salvo na base compartilhada.','info');render();}
+    catch(ie){UI.imp=null;UI.impErr=ie&&ie.message||'Não foi possível importar.';openSettings();}}
   else if(a==='clearAll'){UI.confirmAll=true;openSettings();}
   else if(a==='clearAllCancel'){UI.confirmAll=false;openSettings();}
-  else if(a==='clearAll2'){UI.confirmAll=false;await Store.clearAll();UI.f={de:'',ate:'',produto:''};closeModal();}
+  else if(a==='clearAll2'){UI.confirmAll=false;
+    try{await Store.clearAll();UI.f={de:'',ate:'',produto:''};Store.saveConfig();closeModal();render();}
+    catch(ce){UI.impErr=ce&&ce.message||'Não foi possível apagar.';openSettings();}}
   else if(a==='cancel'){UI.confirm=null;render();}
   else if(a==='newC')formC();
   else if(a==='diagC')openDiag(id);
@@ -925,6 +1127,7 @@ document.addEventListener('click',async function(e){
   else if(a==='copyPack'){var txt=document.getElementById('pack').textContent;try{await navigator.clipboard.writeText(txt);t.textContent='Copiado';}catch(x){var r=document.createRange();r.selectNodeContents(document.getElementById('pack'));var s=getSelection();s.removeAllRanges();s.addRange(r);t.textContent='Texto selecionado';}}
   }catch(err){S.errMsg='A ação não foi concluída: '+(err&&err.message||err&&err.code||'erro')+'. Tente de novo.';render();}
 });
+document.addEventListener('submit',function(e){if(e.target&&e.target.id==='login-form'){e.preventDefault();doLogin();}});
 document.addEventListener('change',function(e){var id=e.target.id;
   if(id==='f-de'||id==='f-ate'||id==='f-produto'){UI.f[id.slice(2)]=e.target.value;Store.saveConfig();render();}
   else if(id==='imp-file'){var fl=e.target.files&&e.target.files[0];if(!fl)return;var fr=new FileReader();fr.onload=function(){try{UI.imp=parseBackup(String(fr.result));UI.impErr='';}catch(err){UI.imp=null;UI.impErr=err.message;}openSettings();};fr.onerror=function(){UI.impErr='Não foi possível ler o arquivo.';openSettings();};fr.readAsText(fl);}
@@ -932,7 +1135,7 @@ document.addEventListener('change',function(e){var id=e.target.id;
   else if(id==='c-formato')toggleReel();});
 var qT;document.addEventListener('input',function(e){if(e.target.id==='l-q'){clearTimeout(qT);var v=e.target.value;qT=setTimeout(function(){UI.lst.q=v;render();var el=document.getElementById('l-q');if(el){el.focus();el.setSelectionRange(v.length,v.length);}},250);}});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!document.getElementById('modal').hidden)closeModal();});
-renderTabs();
+boot();
 </script>
 
 </body>
